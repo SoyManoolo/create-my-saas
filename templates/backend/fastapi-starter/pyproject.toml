@@ -4,4 +4,5 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.141.1",
+    "pwdlib[argon2]>=0.3.0",
 ]
