@@ -22,3 +22,6 @@ class UserPublic(BaseModel):
     name: str
     email_verified: bool = False
     is_active: bool = True
+
+class UserUpdate(BaseModel):
+    name: str | None = None
