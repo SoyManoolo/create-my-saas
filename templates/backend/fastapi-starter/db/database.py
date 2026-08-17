@@ -1,14 +1,20 @@
 import os
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_async_engine(DATABASE_URL)
 
-def get_db():
-    db: Session = SessionLocal()
+SessionLocal = async_sessionmaker(
+    bind=engine,
+    expire_on_commit=False,
+)
+async def get_db():
+    db: AsyncSession = SessionLocal()
     try:
         yield db
     finally:

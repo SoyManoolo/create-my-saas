@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from auth.security.password import verify_password
+from modules.auth.security.password import verify_password
 
 class AuthRepository:
     def __init__(self, db: Session):

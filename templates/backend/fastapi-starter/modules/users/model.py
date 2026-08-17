@@ -4,7 +4,8 @@ from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
 from uuid6 import uuid7
 from uuid import UUID
 
-now = datetime.now(timezone.utc)
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 class Base(DeclarativeBase):
     pass
@@ -18,5 +19,5 @@ class User(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
