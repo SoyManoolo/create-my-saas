@@ -34,6 +34,5 @@ class AuthService:
 
         return self.user_repository.create_user(user)
 
-    def logout(self, token: str):
-        
+    async def logout(self, token: str):
         return ""
