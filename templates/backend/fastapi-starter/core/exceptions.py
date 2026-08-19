@@ -1,34 +1,18 @@
 class AppError(Exception):
+    """Base exception exposed by the application API."""
+
+    status_code = 400
+    code = "APP_ERROR"
+    message = "An unexpected application error occurred."
+
     def __init__(
         self,
-        status_code: int,
-        code: str,
-        message: str,
-    ):
-        self.status_code = status_code
-        self.code = code
-        self.message = message
-
-
-class InvalidCredentialsError(AppError):
-    status_code = 401
-    code = "INVALID_CREDENTIALS"
-    message = "Could not validate credentials"
-
-
-class UserNotFoundError(AppError):
-    status_code = 404
-    code = "USER_NOT_FOUND"
-    message = "User not found"
-
-
-class EmailAlreadyExistsError(AppError):
-    status_code = 409
-    code = "EMAIL_ALREADY_EXISTS"
-    message = "Email is already registered"
-
-
-class InactiveUserError(AppError):
-    status_code = 403
-    code = "USER_INACTIVE"
-    message = "User is inactive"
+        message: str | None = None,
+        *,
+        code: str | None = None,
+        status_code: int | None = None,
+    ) -> None:
+        self.message = message or self.message
+        self.code = code or self.code
+        self.status_code = status_code or self.status_code
+        super().__init__(self.message)

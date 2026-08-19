@@ -3,6 +3,8 @@ from fastapi import Depends
 from modules.users.model import User
 from modules.auth.dependencies import oauth2_scheme, get_user_repository
 from modules.users.repository import UserRepository
+from modules.auth.exceptions import ExpiredTokenError, InvalidAccessTokenError, InactiveUserError
+from modules.users.exceptions import UserNotFoundError
 import jwt
 import os
 
@@ -20,18 +22,30 @@ async def encode_access_token(user_id: str):
         SECRET_KEY,
         algorithm=ALGORITHM)
 
-async def decode_access_token(token: str):
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+def decode_access_token(token: str) -> dict:
+    try:
+        return jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+        )
+
+    except jwt.ExpiredSignatureError as exc:
+        raise ExpiredTokenError() from exc
+
+    except jwt.InvalidTokenError as exc:
+        raise InvalidAccessTokenError() from exc
 
 async def get_current_user(token: str = Depends(oauth2_scheme), user_repository: UserRepository = Depends(get_user_repository)) -> User:
-    payload = await decode_access_token(token)
-    user_id: str = payload.get("sub")
+    payload = decode_access_token(token)
+    user_id: str | None = payload.get("sub")
+    if user_id is None:
+        raise InvalidAccessTokenError()
+
     user = await user_repository.get_user_by_id(user_id)
-
     if user is None:
-        return None
-
+        raise UserNotFoundError()
     if not user.is_active:
-        return None
+        raise InactiveUserError()
 
     return user
