@@ -1,0 +1,4 @@
+import { AppShell } from "../components/app-shell";
+import styles from "../product.module.css";
+
+export default function AccountPage(){return <AppShell><section className={styles.content}><p className={styles.eyebrow}>CUENTA</p><h1>Perfil y plan</h1><p className={styles.lead}>Un lugar central para la identidad del usuario, seguridad y suscripción.</p><div className={styles.grid}><article className={styles.card}><div className={styles.cardIcon}>ER</div><p>Usuario actual</p><strong>Erik Ramos</strong><span>erik@example.com</span><button>Editar perfil →</button></article><article className={styles.card}><div className={styles.cardIcon}>◇</div><p>Suscripción</p><strong>Plan Free</strong><span>Activo · 0 € / mes</span><button>Gestionar facturación →</button></article></div></section></AppShell>}

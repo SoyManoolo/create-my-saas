@@ -1,0 +1,3 @@
+import Link from "next/link";
+import styles from "../auth.module.css";
+export default function RegisterPage(){return <main className={styles.page}><section className={styles.box}><div className={styles.brand}><span>n</span>Nexa</div><h1>Crea tu cuenta</h1><p>Empieza con la base de tu nuevo producto.</p><form className={styles.form}><label>Nombre<input placeholder="Tu nombre"/></label><label>Correo electrónico<input type="email" placeholder="tu@empresa.com"/></label><label>Contraseña<input type="password" placeholder="8 caracteres o más"/></label><button type="submit">Crear cuenta</button></form><p className={styles.footer}>¿Ya tienes cuenta? <Link href="/login">Iniciar sesión</Link></p></section></main>}

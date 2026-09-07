@@ -1,0 +1,3 @@
+import Link from "next/link";
+import styles from "../auth.module.css";
+export default function LoginPage(){return <main className={styles.page}><section className={styles.box}><div className={styles.brand}><span>n</span>Nexa</div><h1>Bienvenido de vuelta</h1><p>Accede a tu espacio de trabajo.</p><form className={styles.form}><label>Correo electrónico<input type="email" placeholder="tu@empresa.com"/></label><label>Contraseña<input type="password" placeholder="••••••••"/></label><button type="submit">Iniciar sesión</button></form><p className={styles.footer}>¿Aún no tienes cuenta? <Link href="/register">Crear cuenta</Link></p></section></main>}
