@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-:root { --canvas:#f7f8fc; --surface:#fff; --surface-soft:#f3f5fa; --ink:#172033; --muted:#697386; --line:#e7eaf0; --accent:#625bf6; --accent-dark:#4f46e5; --accent-soft:#efefff; --teal:#16a394; --amber:#f59e0b; --rose:#ec5e78; --shadow:0 12px 35px rgba(29,38,59,.06); }
+:root { --canvas:#f7f8fc; --surface:#fff; --surface-soft:#f3f5fa; --ink:#172033; --muted:#697386; --line:#e7eaf0; --accent:#625bf6; --accent-dark:#4f46e5; --accent-soft:#efefff; --teal:#16a394; --amber:#f59e0b; --rose:#ec5e78; --shadow:0 12px 35px rgba(29,38,59,.06); color-scheme:light; }
+
+[data-theme="dark"] { --canvas:#10121a; --surface:#181b26; --surface-soft:#222633; --ink:#f0f2f8; --muted:#a7afc0; --line:#2c3140; --accent:#9a94ff; --accent-dark:#b6b2ff; --accent-soft:#29284a; --teal:#4bd1be; --amber:#f7c768; --rose:#ff91a3; --shadow:0 12px 35px rgba(0,0,0,.22); color-scheme:dark; }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--canvas); color:var(--ink); font-family:var(--font-geist),Arial,sans-serif; }
 button,input { font:inherit; } button { cursor:pointer; }
