@@ -1,16 +1,15 @@
-from pydantic import BaseModel, EmailStr, field_validator
-from datetime import datetime, timezone
-
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 class UserRegister(BaseModel):
     email: EmailStr
-    password: str
-    name: str
-
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(min_length=1, max_length=120)
     @field_validator("password")
-    def validate_password(cls, value):
-        if len(value) < 8:
-            raise ValueError("Password must be at least 8 characters long")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not any(c.isalpha() for c in value) or not any(c.isdigit() for c in value):
+            raise ValueError("Password must contain a letter and a number")
         return value
 
 class UserLogin(BaseModel):
@@ -18,10 +17,22 @@ class UserLogin(BaseModel):
     password: str
 
 class UserPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
     email: EmailStr
     name: str
-    email_verified: bool = False
-    is_active: bool = True
+    email_verified: bool
+    is_active: bool
 
 class UserUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+
+class ChangePassword(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+class ResetPasswordRequest(BaseModel): email: EmailStr
+class ResetPasswordConfirm(BaseModel):
+    token: str = Field(min_length=20)
+    new_password: str = Field(min_length=8, max_length=128)
+class TokenRequest(BaseModel): token: str = Field(min_length=20)
