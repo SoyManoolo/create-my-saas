@@ -7,10 +7,11 @@ import { User } from '../users/user.entity';
 import { Invitation } from './invitation.entity';
 import { Membership, OrganizationRole } from './membership.entity';
 import { Organization } from './organization.entity';
+import { SecureEmailService } from '../auth/secure-email.service';
 
 @Injectable()
 export class OrganizationsService {
- constructor(@InjectRepository(Organization) private readonly organizations: Repository<Organization>, @InjectRepository(Membership) private readonly memberships: Repository<Membership>, @InjectRepository(Invitation) private readonly invitations: Repository<Invitation>) {}
+ constructor(@InjectRepository(Organization) private readonly organizations: Repository<Organization>, @InjectRepository(Membership) private readonly memberships: Repository<Membership>, @InjectRepository(Invitation) private readonly invitations: Repository<Invitation>, private readonly secureEmail: SecureEmailService) {}
  async create(user: User, name: string, slug?: string): Promise<Organization> {
   const derived = (slug ?? name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!derived) throw new AppError('INVALID_ORGANIZATION_SLUG', 'Organization slug must contain letters or numbers.', 400);
@@ -25,7 +26,7 @@ export class OrganizationsService {
  async invite(organizationId: string, email: string, role: 'admin' | 'member'): Promise<void> {
   const raw = randomBytes(48).toString('base64url');
   await this.invitations.save(this.invitations.create({ organizationId, email: email.toLowerCase(), role, tokenHash: this.hash(raw), acceptedAt: null, expiresAt: new Date(Date.now() + 7 * 86_400_000) }));
-  // Deliver raw through the configured transactional-email adapter; it is never stored or returned.
+  await this.secureEmail.send(email, 'Organization invitation', `Use this one-time invitation token: ${raw}`);
  }
  async acceptInvitation(user: User, token: string): Promise<Membership> {
   const invitation = await this.invitations.findOneBy({ tokenHash: this.hash(token) });
