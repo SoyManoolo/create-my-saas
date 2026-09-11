@@ -20,7 +20,7 @@ if (!databaseUrl) {
 export default new DataSource({
   type: 'postgres',
   url: databaseUrl,
-  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  ssl: ['1', 'true', 'yes', 'on'].includes(process.env.DATABASE_SSL?.trim().toLowerCase() ?? '') ? { rejectUnauthorized: true } : false,
   entities: [User, AuthToken, RefreshSession, OAuthState, Organization, Membership, Invitation, BillingCustomer, Subscription],
   migrations: [CreateUsers1773139200000, AddSaasCore1773139300000],
   synchronize: false,

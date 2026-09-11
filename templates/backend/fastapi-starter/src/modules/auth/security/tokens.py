@@ -16,12 +16,12 @@ def opaque_token() -> str: return token_urlsafe(48)
 def token_hash(value: str) -> str: return sha256(value.encode()).hexdigest()
 
 def encode_access_token(user_id: UUID | str) -> str:
-    return jwt.encode({"sub": str(user_id), "type": "access", "jti": uuid4().hex,
+    return jwt.encode({"sub": str(user_id), "type": "access", "jti": uuid4().hex, "iss": settings.jwt_issuer, "aud": settings.jwt_audience,
         "exp": utc_now() + timedelta(minutes=settings.access_token_expire_minutes)}, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 def decode_access_token(token: str) -> dict:
     try:
-        data = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        data = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm], issuer=settings.jwt_issuer, audience=settings.jwt_audience)
         if data.get("type") != "access" or not data.get("sub"): raise InvalidAccessTokenError()
         return data
     except jwt.ExpiredSignatureError as exc: raise ExpiredTokenError() from exc

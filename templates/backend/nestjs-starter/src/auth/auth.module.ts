@@ -23,8 +23,15 @@ import { SecureEmailService } from './secure-email.service';
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('SECRET_KEY'),
         signOptions: {
-          algorithm: config.get<string>('ALGORITHM', 'HS256') as 'HS256',
-          expiresIn: `${config.get<number>('ACCESS_TOKEN_EXPIRE_MINUTES', 30)}m`,
+          algorithm: config.get<string>('JWT_ALGORITHM', 'HS256') as 'HS256',
+          expiresIn: `${config.get<number>('ACCESS_TOKEN_EXPIRE_MINUTES', 15)}m`,
+          issuer: config.get<string>('JWT_ISSUER', 'nestjs-starter'),
+          audience: config.get<string>('JWT_AUDIENCE', 'nestjs-starter-api'),
+        },
+        verifyOptions: {
+          algorithms: [config.get<string>('JWT_ALGORITHM', 'HS256') as 'HS256'],
+          issuer: config.get<string>('JWT_ISSUER', 'nestjs-starter'),
+          audience: config.get<string>('JWT_AUDIENCE', 'nestjs-starter-api'),
         },
       }),
     }),

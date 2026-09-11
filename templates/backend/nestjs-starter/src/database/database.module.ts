@@ -30,7 +30,7 @@ import { OAuthState } from '../auth/oauth-state.entity';
           url: config.getOrThrow<string>('DATABASE_URL'),
           autoLoadEntities: true,
           synchronize: false,
-          ssl: config.get<string>('DATABASE_SSL') === 'true' ? { rejectUnauthorized: false } : false,
+          ssl: config.get<boolean>('DATABASE_SSL', false) ? { rejectUnauthorized: true } : false,
         };
       },
     }),

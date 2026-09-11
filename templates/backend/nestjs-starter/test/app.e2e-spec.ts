@@ -22,6 +22,10 @@ describe('AppController (e2e)', () => {
     const response = await request(app.getHttpServer()).get('/').expect(200);
     expect(response.body).toEqual({ message: 'Running successfully!' });
     expect(response.headers['x-request-id']).toBeDefined();
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+    expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(response.headers['x-powered-by']).toBeUndefined();
   });
 
   it('registers, authenticates and returns the current user', async () => {

@@ -85,7 +85,7 @@ export class AuthService {
       return { kind: 'rotated' as const, user, nextRaw };
     });
     if (outcome.kind === 'rotated') {
-      return { authentication: { accessToken: await this.jwtService.signAsync({ sub: outcome.user.id }), user: UserPublicDto.fromEntity(outcome.user) }, refreshToken: outcome.nextRaw };
+      return { authentication: { accessToken: await this.jwtService.signAsync({ sub: outcome.user.id, type: 'access', jti: randomBytes(16).toString('hex') }), user: UserPublicDto.fromEntity(outcome.user) }, refreshToken: outcome.nextRaw };
     }
     throw new AppError(outcome.kind === 'reused' ? 'REFRESH_TOKEN_REUSED' : 'INVALID_REFRESH_TOKEN', outcome.kind === 'reused' ? 'The refresh token was already used; all sessions were revoked.' : 'The refresh token is invalid or expired.', 401);
   }
@@ -154,7 +154,7 @@ export class AuthService {
   private async createAuthentication(user: User, metadata: RequestMetadata): Promise<BrowserAuthenticationResult> {
     const refreshToken = this.newOpaqueToken();
     await this.sessions.save(this.sessions.create({ id: this.sessionIdFromToken(refreshToken), userId: user.id, tokenHash: this.hashToken(refreshToken), expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000), revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null }));
-    return { authentication: { accessToken: await this.jwtService.signAsync({ sub: user.id }), user: UserPublicDto.fromEntity(user) }, refreshToken };
+    return { authentication: { accessToken: await this.jwtService.signAsync({ sub: user.id, type: 'access', jti: randomBytes(16).toString('hex') }), user: UserPublicDto.fromEntity(user) }, refreshToken };
   }
   private async createOneTimeToken(userId: string, kind: TokenKind): Promise<string> {
     await this.tokens.update({ userId, kind, usedAt: IsNull() }, { usedAt: new Date() });

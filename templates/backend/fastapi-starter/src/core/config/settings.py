@@ -10,8 +10,11 @@ def _bool(name: str, default: bool = False) -> bool:
 class Settings:
     environment: str = os.getenv("APP_ENV", "development").strip().lower()
     database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/app")
+    database_ssl: bool = _bool("DATABASE_SSL")
     secret_key: str = os.getenv("SECRET_KEY", "development-only-secret-not-for-production-32b")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    jwt_issuer: str = os.getenv("JWT_ISSUER", "fastapi-starter")
+    jwt_audience: str = os.getenv("JWT_AUDIENCE", "fastapi-starter-api")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
     refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
     refresh_cookie_name: str = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
@@ -21,8 +24,8 @@ class Settings:
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     cors_origins_raw: str = os.getenv("CORS_ORIGINS", os.getenv("FRONTEND_URL", "http://localhost:3000"))
     redis_url: str | None = os.getenv("REDIS_URL")
-    rate_limit_enabled: bool = _bool("RATE_LIMIT_ENABLED")
-    rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))
+    rate_limit_enabled: bool = _bool("RATE_LIMIT_ENABLED", True)
+    rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", "30"))
     rate_limit_window_seconds: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     oauth_enabled: bool = _bool("OAUTH_ENABLED")
     oauth_callback_base_url: str = os.getenv("OAUTH_CALLBACK_BASE_URL", "http://localhost:8000")
@@ -48,12 +51,16 @@ class Settings:
             raise RuntimeError("SECRET_KEY must be a unique value of at least 32 characters in production.")
         if not self.database_url or "localhost" in self.database_url:
             raise RuntimeError("DATABASE_URL must point to the production database.")
+        if not self.database_ssl:
+            raise RuntimeError("DATABASE_SSL must be enabled in production.")
         if not self.cors_origins or any(urlparse(origin).scheme != "https" for origin in self.cors_origins):
             raise RuntimeError("CORS_ORIGINS must contain explicit HTTPS origins in production.")
         if not self.smtp_configured:
             raise RuntimeError("SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM are required in production.")
         if not self.cookie_secure:
             raise RuntimeError("COOKIE_SECURE must be enabled in production.")
+        if not self.rate_limit_enabled or not self.redis_url or urlparse(self.redis_url).scheme != "rediss":
+            raise RuntimeError("RATE_LIMIT_ENABLED and a TLS REDIS_URL (rediss://) are required in production.")
         if self.cookie_same_site not in {"lax", "strict", "none"}:
             raise RuntimeError("COOKIE_SAME_SITE must be lax, strict or none.")
         if self.cookie_same_site == "none" and not self.cookie_secure:

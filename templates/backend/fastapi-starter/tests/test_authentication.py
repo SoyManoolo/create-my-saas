@@ -119,7 +119,9 @@ class AuthenticationApiTests(unittest.TestCase):
         response = self.login()
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.json()["access_token"], str)
-        self.assertIsInstance(response.json()["refresh_token"], str)
+        self.assertNotIn("refresh_token", response.json())
+        self.assertIn(f"{settings.refresh_cookie_name}=", response.headers["set-cookie"])
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
         self.assertEqual(response.json()["token_type"], "bearer")
 
         invalid = self.login(password="not-the-password")

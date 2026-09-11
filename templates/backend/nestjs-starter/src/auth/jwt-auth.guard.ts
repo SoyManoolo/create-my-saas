@@ -5,7 +5,7 @@ import { AppError } from '../common/errors/app.error';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
 
-type JwtPayload = { sub?: string };
+type JwtPayload = { sub?: string; type?: string; jti?: string };
 type AuthenticatedRequest = Request & { user: User };
 
 @Injectable()
@@ -24,7 +24,7 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(header.slice(7));
-      if (!payload.sub || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(payload.sub)) {
+      if (payload.type !== 'access' || !payload.jti || !payload.sub || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(payload.sub)) {
         throw new AppError('INVALID_ACCESS_TOKEN', 'The access token is invalid.', 401);
       }
       request.user = await this.usersService.findActiveById(payload.sub);

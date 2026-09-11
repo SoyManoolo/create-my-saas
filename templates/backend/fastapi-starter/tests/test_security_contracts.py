@@ -1,4 +1,5 @@
 import unittest
+from fastapi.testclient import TestClient
 from main import app
 from src.modules.auth.security.tokens import decode_access_token, encode_access_token, token_hash
 from src.modules.users.schemas import UserRegister
@@ -27,3 +28,16 @@ class SecurityContractTests(unittest.TestCase):
         self.assertNotIn("reset_token", document)
         self.assertNotIn("verification_token", document)
         self.assertNotIn("invite_token", document)
+
+    def test_api_responses_have_security_headers(self):
+        response = TestClient(app).get("/")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+
+    def test_validation_errors_do_not_reflect_credentials(self):
+        password = "secret-password1"
+        response = TestClient(app).post("/auth/login", json={"email": "not-an-email", "password": password})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "HTTP_422")
+        self.assertNotIn(password, response.text)

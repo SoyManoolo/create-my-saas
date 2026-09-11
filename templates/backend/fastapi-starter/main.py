@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from src.modules.auth.router import router as auth_router
 from src.modules.auth.oauth import router as oauth_router
@@ -8,9 +9,9 @@ from src.modules.organizations.router import router as organizations_router
 from src.modules.billing.router import router as billing_router
 from src.core.config import settings
 from src.core.exceptions import AppError
-from src.core.exception_handlers import app_error_handler
+from src.core.exception_handlers import app_error_handler, request_validation_error_handler
 from src.core.logging import configure_logging
-from src.core.middleware import RequestContextMiddleware, RateLimitMiddleware
+from src.core.middleware import RequestContextMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 
 configure_logging()
 
@@ -20,8 +21,10 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="FastAPI Starter", description="A starter template for FastAPI applications", version="1.0.0", lifespan=lifespan)
+is_production = settings.environment in {"production", "staging"}
+app = FastAPI(title="FastAPI Starter", description="A starter template for FastAPI applications", version="1.0.0", lifespan=lifespan, docs_url=None if is_production else "/docs", redoc_url=None if is_production else "/redoc", openapi_url=None if is_production else "/openapi.json")
 app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(RequestValidationError, request_validation_error_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -31,6 +34,7 @@ app.add_middleware(
 )
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 @app.get("/")
 def read_root():
