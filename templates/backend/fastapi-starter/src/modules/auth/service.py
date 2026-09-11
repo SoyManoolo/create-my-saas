@@ -26,15 +26,15 @@ class AuthService:
         raw = opaque_token()
         return raw, RefreshToken(user_id=user.id, jti=opaque_token()[:48], token_hash=token_hash(raw), expires_at=utc_now() + timedelta(days=settings.refresh_token_expire_days))
 
-    def _session_response(self, user: User, raw: str) -> dict:
-        return {"access_token": encode_access_token(user.id), "refresh_token": raw, "token_type": "bearer", "expires_in": settings.access_token_expire_minutes * 60}
+    def _session_response(self, user: User) -> dict:
+        return {"access_token": encode_access_token(user.id), "token_type": "bearer", "expires_in": settings.access_token_expire_minutes * 60}
 
-    async def issue_session(self, user: User) -> dict:
+    async def issue_session(self, user: User) -> tuple[dict, str]:
         raw, record = self._new_session(user)
         self.db.add(record); await self.db.commit()
-        return self._session_response(user, raw)
+        return self._session_response(user), raw
 
-    async def refresh(self, raw: str) -> dict | None:
+    async def refresh(self, raw: str) -> tuple[dict, str] | None:
         # The conditional update is the single-use claim. Only its winner issues a new token.
         now = utc_now()
         claimed_user_id = (await self.db.execute(
@@ -61,7 +61,7 @@ class AuthService:
         next_raw, next_record = self._new_session(user)
         self.db.add(next_record)
         await self.db.commit()
-        return self._session_response(user, next_raw)
+        return self._session_response(user), next_raw
 
     async def revoke(self, raw: str) -> None:
         token = (await self.db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash(raw)))).scalar_one_or_none()

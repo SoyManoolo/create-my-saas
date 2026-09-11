@@ -1,6 +1,11 @@
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+def validate_password_strength(value: str) -> str:
+    if not any(c.isalpha() for c in value) or not any(c.isdigit() for c in value):
+        raise ValueError("Password must contain a letter and a number")
+    return value
+
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -8,9 +13,7 @@ class UserRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        if not any(c.isalpha() for c in value) or not any(c.isdigit() for c in value):
-            raise ValueError("Password must contain a letter and a number")
-        return value
+        return validate_password_strength(value)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -30,9 +33,11 @@ class UserUpdate(BaseModel):
 class ChangePassword(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
+    _validate_password = field_validator("new_password")(validate_password_strength)
 
 class ResetPasswordRequest(BaseModel): email: EmailStr
 class ResetPasswordConfirm(BaseModel):
     token: str = Field(min_length=20)
     new_password: str = Field(min_length=8, max_length=128)
+    _validate_password = field_validator("new_password")(validate_password_strength)
 class TokenRequest(BaseModel): token: str = Field(min_length=20)

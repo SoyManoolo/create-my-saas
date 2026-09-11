@@ -14,6 +14,10 @@ class Settings:
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
     refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+    refresh_cookie_name: str = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
+    csrf_cookie_name: str = os.getenv("CSRF_COOKIE_NAME", "csrf_token")
+    cookie_secure: bool = _bool("COOKIE_SECURE")
+    cookie_same_site: str = os.getenv("COOKIE_SAME_SITE", "lax").strip().lower()
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     cors_origins_raw: str = os.getenv("CORS_ORIGINS", os.getenv("FRONTEND_URL", "http://localhost:3000"))
     redis_url: str | None = os.getenv("REDIS_URL")
@@ -48,6 +52,12 @@ class Settings:
             raise RuntimeError("CORS_ORIGINS must contain explicit HTTPS origins in production.")
         if not self.smtp_configured:
             raise RuntimeError("SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM are required in production.")
+        if not self.cookie_secure:
+            raise RuntimeError("COOKIE_SECURE must be enabled in production.")
+        if self.cookie_same_site not in {"lax", "strict", "none"}:
+            raise RuntimeError("COOKIE_SAME_SITE must be lax, strict or none.")
+        if self.cookie_same_site == "none" and not self.cookie_secure:
+            raise RuntimeError("COOKIE_SECURE is required when COOKIE_SAME_SITE is none.")
         if self.smtp_port not in {465, 587}:
             raise RuntimeError("SMTP_PORT must be 465 (TLS) or 587 (STARTTLS).")
         if self.smtp_port == 465 and not self.smtp_use_ssl:

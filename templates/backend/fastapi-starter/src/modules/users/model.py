@@ -38,6 +38,16 @@ class RefreshToken(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+class OAuthState(Base):
+    __tablename__ = "oauth_states"
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # Kept server-side only for the short authorization-code exchange window.
+    code_verifier: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 class OneTimeToken(Base):
     __tablename__ = "one_time_tokens"
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
