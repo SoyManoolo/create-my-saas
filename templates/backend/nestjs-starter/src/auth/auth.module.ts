@@ -11,6 +11,7 @@ import { AuthToken } from './auth-token.entity';
 import { OAuthState } from './oauth-state.entity';
 import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
 import { RateLimitService } from '../common/rate-limit/rate-limit.service';
+import { SecureEmailService } from './secure-email.service';
 
 @Global()
 @Module({
@@ -29,7 +30,7 @@ import { RateLimitService } from '../common/rate-limit/rate-limit.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, RateLimitService, RateLimitGuard],
-  exports: [JwtModule, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, RateLimitService, RateLimitGuard, SecureEmailService],
+  exports: [JwtModule, JwtAuthGuard, SecureEmailService],
 })
 export class AuthModule {}

@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'node:crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, MoreThan, Repository } from 'typeorm';
 import { AppError } from '../common/errors/app.error';
 import { UserPublicDto } from '../users/dto/user-public.dto';
 import { User } from '../users/user.entity';
@@ -14,6 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshSession } from './refresh-session.entity';
 import { OAuthState } from './oauth-state.entity';
+import { SecureEmailService } from './secure-email.service';
 
 export type AuthenticationResult = { accessToken: string; refreshToken: string; user: UserPublicDto };
 type RequestMetadata = { ip?: string; userAgent?: string };
@@ -28,6 +29,8 @@ export class AuthService {
     @InjectRepository(RefreshSession) private readonly sessions: Repository<RefreshSession>,
     @InjectRepository(AuthToken) private readonly tokens: Repository<AuthToken>,
     @InjectRepository(OAuthState) private readonly oauthStates: Repository<OAuthState>,
+    private readonly dataSource: DataSource,
+    private readonly secureEmail: SecureEmailService,
   ) {}
 
   async register(dto: RegisterDto): Promise<UserPublicDto> {
@@ -35,7 +38,7 @@ export class AuthService {
     if (await this.usersService.findByEmail(email)) throw new AppError('EMAIL_ALREADY_EXISTS', 'An account with this email already exists.', 409);
     try {
       const user = await this.usersService.create({ email, name: dto.name, passwordHash: await this.hashPassword(dto.password) });
-      await this.createOneTimeToken(user.id, 'email_verification');
+      await this.sendOneTimeToken(user, 'email_verification');
       return UserPublicDto.fromEntity(user);
     } catch (error) {
       if (this.isUniqueViolation(error)) throw new AppError('EMAIL_ALREADY_EXISTS', 'An account with this email already exists.', 409);
@@ -51,20 +54,39 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string, metadata: RequestMetadata = {}): Promise<AuthenticationResult> {
-    const session = await this.sessions.findOneBy({ tokenHash: this.hashToken(refreshToken) });
-    if (!session || session.expiresAt <= new Date()) throw new AppError('INVALID_REFRESH_TOKEN', 'The refresh token is invalid or expired.', 401);
-    if (session.revokedAt) {
-      if (session.replacedById) await this.revokeUserSessions(session.userId);
-      throw new AppError(session.replacedById ? 'REFRESH_TOKEN_REUSED' : 'INVALID_REFRESH_TOKEN', 'The refresh token is invalid or expired.', 401);
+    const outcome = await this.dataSource.transaction(async (manager) => {
+      const sessions = manager.getRepository(RefreshSession);
+      const now = new Date();
+      const session = await sessions.findOneBy({ tokenHash: this.hashToken(refreshToken) });
+      if (!session || session.expiresAt <= now) return { kind: 'invalid' as const };
+      if (session.revokedAt) {
+        if (session.replacedById) await sessions.update({ userId: session.userId, revokedAt: IsNull() }, { revokedAt: now });
+        return { kind: session.replacedById ? 'reused' as const : 'invalid' as const };
+      }
+
+      const nextRaw = this.newOpaqueToken();
+      const changed = await sessions.update(
+        { id: session.id, revokedAt: IsNull(), expiresAt: MoreThan(now) },
+        { revokedAt: now, replacedById: this.sessionIdFromToken(nextRaw) },
+      );
+      if (!changed.affected) {
+        await sessions.update({ userId: session.userId, revokedAt: IsNull() }, { revokedAt: now });
+        return { kind: 'reused' as const };
+      }
+
+      const user = await manager.getRepository(User).findOneBy({ id: session.userId, isActive: true });
+      if (!user) return { kind: 'invalid' as const };
+      await sessions.save(sessions.create({
+        id: this.sessionIdFromToken(nextRaw), userId: user.id, tokenHash: this.hashToken(nextRaw),
+        expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000),
+        revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null,
+      }));
+      return { kind: 'rotated' as const, user, nextRaw };
+    });
+    if (outcome.kind === 'rotated') {
+      return { accessToken: await this.jwtService.signAsync({ sub: outcome.user.id }), refreshToken: outcome.nextRaw, user: UserPublicDto.fromEntity(outcome.user) };
     }
-    const user = await this.usersService.findActiveById(session.userId);
-    const next = await this.createAuthentication(user, metadata);
-    const changed = await this.sessions.update({ id: session.id, revokedAt: IsNull() }, { revokedAt: new Date(), replacedById: this.sessionIdFromToken(next.refreshToken) });
-    if (!changed.affected) {
-      await this.revokeUserSessions(user.id);
-      throw new AppError('REFRESH_TOKEN_REUSED', 'The refresh token was already used; all sessions were revoked.', 401);
-    }
-    return next;
+    throw new AppError(outcome.kind === 'reused' ? 'REFRESH_TOKEN_REUSED' : 'INVALID_REFRESH_TOKEN', outcome.kind === 'reused' ? 'The refresh token was already used; all sessions were revoked.' : 'The refresh token is invalid or expired.', 401);
   }
 
   async logout(refreshToken?: string): Promise<void> {
@@ -80,7 +102,15 @@ export class AuthService {
 
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email);
-    if (user?.isActive) await this.createOneTimeToken(user.id, 'password_reset');
+    if (!user?.isActive) return;
+    try {
+      await this.sendOneTimeToken(user, 'password_reset');
+    } catch (error) {
+      // The response must remain the same for existing and non-existing addresses.
+      // A delivery outage is an operational concern, never an account-enumeration oracle.
+      if (error instanceof AppError && error.code === 'EMAIL_DELIVERY_UNAVAILABLE') return;
+      throw error;
+    }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
@@ -96,7 +126,7 @@ export class AuthService {
     const user = await this.usersService.findById(record.userId);
     if (user) { user.emailVerified = true; await this.usersService.save(user); }
   }
-  async resendEmailVerification(user: User): Promise<void> { if (!user.emailVerified) await this.createOneTimeToken(user.id, 'email_verification'); }
+  async resendEmailVerification(user: User): Promise<void> { if (!user.emailVerified) await this.sendOneTimeToken(user, 'email_verification'); }
   oauthProviders(): Array<{ provider: string; configured: boolean }> { return ['google', 'github'].map((provider) => ({ provider, configured: Boolean(this.config.get<string>(`OAUTH_${provider.toUpperCase()}_CLIENT_ID`) && this.config.get<string>(`OAUTH_${provider.toUpperCase()}_AUTHORIZATION_URL`)) })); }
   async oauthStart(provider: string): Promise<{ authorizationUrl: string }> {
     const key = provider.toUpperCase();
@@ -125,11 +155,18 @@ export class AuthService {
     await this.sessions.save(this.sessions.create({ id: this.sessionIdFromToken(refreshToken), userId: user.id, tokenHash: this.hashToken(refreshToken), expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000), revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null }));
     return { accessToken: await this.jwtService.signAsync({ sub: user.id }), refreshToken, user: UserPublicDto.fromEntity(user) };
   }
-  private async createOneTimeToken(userId: string, kind: TokenKind): Promise<void> {
+  private async createOneTimeToken(userId: string, kind: TokenKind): Promise<string> {
     await this.tokens.update({ userId, kind, usedAt: IsNull() }, { usedAt: new Date() });
     const raw = this.newOpaqueToken();
     await this.tokens.save(this.tokens.create({ userId, kind, tokenHash: this.hashToken(raw), usedAt: null, expiresAt: new Date(Date.now() + this.config.get<number>(kind === 'password_reset' ? 'PASSWORD_RESET_EXPIRE_MINUTES' : 'EMAIL_VERIFICATION_EXPIRE_MINUTES', 60) * 60_000) }));
-    // A mail-provider adapter must deliver raw; raw tokens are intentionally never persisted or returned.
+    return raw;
+  }
+  private async sendOneTimeToken(user: User, kind: TokenKind): Promise<void> {
+    const raw = await this.createOneTimeToken(user.id, kind);
+    const isReset = kind === 'password_reset';
+    const path = isReset ? '/reset-password' : '/verify-email';
+    const url = `${this.config.get<string>('FRONTEND_URL', 'http://localhost:3000').replace(/\/$/, '')}${path}?token=${raw}`;
+    await this.secureEmail.send(user.email, isReset ? 'Reset your password' : 'Verify your email', `Use this one-time link: ${url}`);
   }
   private async consumeToken(raw: string, kind: TokenKind): Promise<AuthToken> {
     const record = await this.tokens.findOneBy({ tokenHash: this.hashToken(raw), kind, usedAt: IsNull() });
