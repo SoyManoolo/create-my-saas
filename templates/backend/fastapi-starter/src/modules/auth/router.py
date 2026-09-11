@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.database import get_db
-from core.exceptions import AppError
-from modules.auth.dependencies import get_user_repository
-from modules.auth.service import AuthService
-from modules.users.repository import UserRepository
-from modules.users.schemas import UserLogin, UserRegister, UserPublic
+from src.db.database import get_db
+from src.core.exceptions import AppError
+from src.modules.auth.dependencies import get_user_repository
+from src.modules.auth.service import AuthService
+from src.modules.users.model import TokenPurpose
+from src.modules.users.repository import UserRepository
+from src.modules.users.schemas import UserLogin, UserRegister, UserPublic
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 def service(db: AsyncSession, users: UserRepository) -> AuthService: return AuthService(db, users)
@@ -14,6 +15,7 @@ def service(db: AsyncSession, users: UserRepository) -> AuthService: return Auth
 async def register(payload: UserRegister, db: AsyncSession = Depends(get_db), users: UserRepository = Depends(get_user_repository)):
     user = await service(db, users).register(payload)
     if not user: raise AppError("An account with this email already exists.", code="EMAIL_ALREADY_EXISTS", status_code=409)
+    await service(db, users).send_one_time_token(user, TokenPurpose.EMAIL_VERIFICATION)
     return user
 
 @router.post("/login")
