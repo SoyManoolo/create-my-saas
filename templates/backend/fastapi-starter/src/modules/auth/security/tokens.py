@@ -1,51 +1,34 @@
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+from secrets import token_urlsafe
+from uuid import UUID, uuid4
+import jwt
 from fastapi import Depends
-from modules.users.model import User
-from modules.auth.dependencies import oauth2_scheme, get_user_repository
-from modules.users.repository import UserRepository
 from modules.auth.exceptions import ExpiredTokenError, InvalidAccessTokenError, InactiveUserError
 from modules.users.exceptions import UserNotFoundError
-import jwt
-import os
+from modules.auth.dependencies import oauth2_scheme, get_user_repository
+from modules.users.repository import UserRepository
+from modules.users.model import User
+from core.config import settings
 
-SECRET_KEY = os.environ["SECRET_KEY"]
-ALGORITHM = os.environ["ALGORITHM"]
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"])
+def utc_now() -> datetime: return datetime.now(timezone.utc)
+def opaque_token() -> str: return token_urlsafe(48)
+def token_hash(value: str) -> str: return sha256(value.encode()).hexdigest()
 
-async def encode_access_token(user_id: str):
-    payload = {
-        "sub": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    }
-    return jwt.encode(
-        payload,
-        SECRET_KEY,
-        algorithm=ALGORITHM)
+def encode_access_token(user_id: UUID | str) -> str:
+    return jwt.encode({"sub": str(user_id), "type": "access", "jti": uuid4().hex,
+        "exp": utc_now() + timedelta(minutes=settings.access_token_expire_minutes)}, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 def decode_access_token(token: str) -> dict:
     try:
-        return jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
-        )
-
-    except jwt.ExpiredSignatureError as exc:
-        raise ExpiredTokenError() from exc
-
-    except jwt.InvalidTokenError as exc:
-        raise InvalidAccessTokenError() from exc
+        data = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        if data.get("type") != "access" or not data.get("sub"): raise InvalidAccessTokenError()
+        return data
+    except jwt.ExpiredSignatureError as exc: raise ExpiredTokenError() from exc
+    except jwt.InvalidTokenError as exc: raise InvalidAccessTokenError() from exc
 
 async def get_current_user(token: str = Depends(oauth2_scheme), user_repository: UserRepository = Depends(get_user_repository)) -> User:
-    payload = decode_access_token(token)
-    user_id: str | None = payload.get("sub")
-    if user_id is None:
-        raise InvalidAccessTokenError()
-
-    user = await user_repository.get_user_by_id(user_id)
-    if user is None:
-        raise UserNotFoundError()
-    if not user.is_active:
-        raise InactiveUserError()
-
+    user = await user_repository.get_user_by_id(decode_access_token(token)["sub"])
+    if not user: raise UserNotFoundError()
+    if not user.is_active: raise InactiveUserError()
     return user
