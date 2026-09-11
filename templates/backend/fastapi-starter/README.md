@@ -17,14 +17,14 @@ uv run fastapi dev main.py
 Run the dependency-free test entry point after syncing with:
 
 ```sh
-PYTHONPATH=src uv run python -m unittest discover -s tests
+uv run python -m unittest discover -s tests
 ```
 
 ## Integration boundaries
 
-Email endpoints return the newly issued opaque token only as a local-development mail
-adapter seam. Replace that response with delivery through your mail service before
-exposing the API publicly. OAuth start/callback implements signed state and PKCE but
+Email endpoints never return opaque tokens. Configure the secure SMTP settings to send
+reset, verification, and invitation links; production and staging refuse to start
+without them. OAuth start/callback implements signed state and PKCE but
 leaves code exchange/profile mapping to a provider adapter; provider client credentials
 remain environment values. For a shared application-side limiter, install the optional
 extra (`uv sync --extra rate-limit`) and set `REDIS_URL`; otherwise the configured

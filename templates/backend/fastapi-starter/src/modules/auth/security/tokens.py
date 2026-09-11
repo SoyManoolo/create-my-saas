@@ -4,12 +4,12 @@ from secrets import token_urlsafe
 from uuid import UUID, uuid4
 import jwt
 from fastapi import Depends
-from modules.auth.exceptions import ExpiredTokenError, InvalidAccessTokenError, InactiveUserError
-from modules.users.exceptions import UserNotFoundError
-from modules.auth.dependencies import oauth2_scheme, get_user_repository
-from modules.users.repository import UserRepository
-from modules.users.model import User
-from core.config import settings
+from src.modules.auth.exceptions import ExpiredTokenError, InvalidAccessTokenError, InactiveUserError
+from src.modules.users.exceptions import UserNotFoundError
+from src.modules.auth.dependencies import oauth2_scheme, get_user_repository
+from src.modules.users.repository import UserRepository
+from src.modules.users.model import User
+from src.core.config import settings
 
 def utc_now() -> datetime: return datetime.now(timezone.utc)
 def opaque_token() -> str: return token_urlsafe(48)

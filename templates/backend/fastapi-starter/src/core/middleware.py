@@ -6,7 +6,7 @@ import structlog
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
-from core.config import settings
+from src.core.config import settings
 
 try:
     from redis.asyncio import from_url as redis_from_url

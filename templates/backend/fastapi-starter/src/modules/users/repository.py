@@ -1,7 +1,7 @@
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from modules.users.model import User
+from src.modules.users.model import User
 
 class UserRepository:
     def __init__(self, db: AsyncSession): self.db = db

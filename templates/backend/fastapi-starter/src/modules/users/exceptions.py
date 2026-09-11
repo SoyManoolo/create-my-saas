@@ -1,4 +1,4 @@
-from core.exceptions import AppError
+from src.core.exceptions import AppError
 
 
 class UserNotFoundError(AppError):

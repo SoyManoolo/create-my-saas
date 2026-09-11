@@ -4,7 +4,7 @@ from uuid import UUID
 from uuid6 import uuid7
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from db.base import Base, utc_now
+from src.db.base import Base, utc_now
 
 class MembershipRole(StrEnum):
     OWNER = "owner"

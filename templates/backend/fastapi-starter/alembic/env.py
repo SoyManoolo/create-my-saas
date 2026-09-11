@@ -1,9 +1,9 @@
 from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from core.config import settings
-from db.base import Base
-import modules.users.model  # register all metadata before Alembic observes it
+from src.core.config import settings
+from src.db.base import Base
+import src.modules.users.model  # register all metadata before Alembic observes it
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", "+psycopg"))

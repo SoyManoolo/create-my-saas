@@ -1,18 +1,34 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from modules.auth.router import router as auth_router
-from modules.auth.oauth import router as oauth_router
-from modules.users.router import router as users_router
-from modules.organizations.router import router as organizations_router
-from modules.billing.router import router as billing_router
-from core.exceptions import AppError
-from core.exception_handlers import app_error_handler
-from core.logging import configure_logging
-from core.middleware import RequestContextMiddleware, RateLimitMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+from src.modules.auth.router import router as auth_router
+from src.modules.auth.oauth import router as oauth_router
+from src.modules.users.router import router as users_router
+from src.modules.organizations.router import router as organizations_router
+from src.modules.billing.router import router as billing_router
+from src.core.config import settings
+from src.core.exceptions import AppError
+from src.core.exception_handlers import app_error_handler
+from src.core.logging import configure_logging
+from src.core.middleware import RequestContextMiddleware, RateLimitMiddleware
 
 configure_logging()
 
-app = FastAPI(title="FastAPI Starter", description="A starter template for FastAPI applications", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    settings.validate()
+    yield
+
+
+app = FastAPI(title="FastAPI Starter", description="A starter template for FastAPI applications", version="1.0.0", lifespan=lifespan)
 app.add_exception_handler(AppError, app_error_handler)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(RateLimitMiddleware)
 

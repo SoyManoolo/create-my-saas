@@ -1,7 +1,7 @@
 """Create users, auth sessions, organizations and billing domain."""
 from alembic import op
-from db.base import Base
-import modules.users.model
+from src.db.base import Base
+import src.modules.users.model
 
 revision = "20260911_0001"
 down_revision = None

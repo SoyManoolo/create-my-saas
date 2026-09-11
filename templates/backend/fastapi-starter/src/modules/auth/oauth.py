@@ -12,7 +12,7 @@ import os
 import jwt
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from core.config import settings
+from src.core.config import settings
 
 router = APIRouter(prefix="/auth/oauth", tags=["oauth"])
 
