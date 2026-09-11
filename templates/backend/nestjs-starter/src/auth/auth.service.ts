@@ -16,7 +16,8 @@ import { RefreshSession } from './refresh-session.entity';
 import { OAuthState } from './oauth-state.entity';
 import { SecureEmailService } from './secure-email.service';
 
-export type AuthenticationResult = { accessToken: string; refreshToken: string; user: UserPublicDto };
+export type AuthenticationResult = { accessToken: string; user: UserPublicDto };
+export type BrowserAuthenticationResult = { authentication: AuthenticationResult; refreshToken: string };
 type RequestMetadata = { ip?: string; userAgent?: string };
 type TokenKind = 'password_reset' | 'email_verification';
 
@@ -46,14 +47,14 @@ export class AuthService {
     }
   }
 
-  async login(dto: LoginDto, metadata: RequestMetadata = {}): Promise<AuthenticationResult> {
+  async login(dto: LoginDto, metadata: RequestMetadata = {}): Promise<BrowserAuthenticationResult> {
     const user = await this.usersService.findByEmail(dto.email, true);
     if (!user || !user.passwordHash || !(await argon2.verify(user.passwordHash, dto.password))) throw new AppError('INVALID_CREDENTIALS', 'The email or password is incorrect.', 401);
     if (!user.isActive) throw new AppError('USER_INACTIVE', 'The user account is inactive.', 403);
     return this.createAuthentication(user, metadata);
   }
 
-  async refresh(refreshToken: string, metadata: RequestMetadata = {}): Promise<AuthenticationResult> {
+  async refresh(refreshToken: string, metadata: RequestMetadata = {}): Promise<BrowserAuthenticationResult> {
     const outcome = await this.dataSource.transaction(async (manager) => {
       const sessions = manager.getRepository(RefreshSession);
       const now = new Date();
@@ -84,7 +85,7 @@ export class AuthService {
       return { kind: 'rotated' as const, user, nextRaw };
     });
     if (outcome.kind === 'rotated') {
-      return { accessToken: await this.jwtService.signAsync({ sub: outcome.user.id }), refreshToken: outcome.nextRaw, user: UserPublicDto.fromEntity(outcome.user) };
+      return { authentication: { accessToken: await this.jwtService.signAsync({ sub: outcome.user.id }), user: UserPublicDto.fromEntity(outcome.user) }, refreshToken: outcome.nextRaw };
     }
     throw new AppError(outcome.kind === 'reused' ? 'REFRESH_TOKEN_REUSED' : 'INVALID_REFRESH_TOKEN', outcome.kind === 'reused' ? 'The refresh token was already used; all sessions were revoked.' : 'The refresh token is invalid or expired.', 401);
   }
@@ -150,10 +151,10 @@ export class AuthService {
     throw new AppError('OAUTH_NOT_IMPLEMENTED', 'OAuth state and PKCE validation succeeded; configure a provider adapter for token exchange.', 501);
   }
 
-  private async createAuthentication(user: User, metadata: RequestMetadata): Promise<AuthenticationResult> {
+  private async createAuthentication(user: User, metadata: RequestMetadata): Promise<BrowserAuthenticationResult> {
     const refreshToken = this.newOpaqueToken();
     await this.sessions.save(this.sessions.create({ id: this.sessionIdFromToken(refreshToken), userId: user.id, tokenHash: this.hashToken(refreshToken), expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000), revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null }));
-    return { accessToken: await this.jwtService.signAsync({ sub: user.id }), refreshToken, user: UserPublicDto.fromEntity(user) };
+    return { authentication: { accessToken: await this.jwtService.signAsync({ sub: user.id }), user: UserPublicDto.fromEntity(user) }, refreshToken };
   }
   private async createOneTimeToken(userId: string, kind: TokenKind): Promise<string> {
     await this.tokens.update({ userId, kind, usedAt: IsNull() }, { usedAt: new Date() });

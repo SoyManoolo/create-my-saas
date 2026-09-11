@@ -32,6 +32,10 @@ import { BillingModule } from './billing/billing.module';
         if (isProduction && (!environment.EMAIL_DELIVERY_URL?.startsWith('https://') || !environment.EMAIL_DELIVERY_TOKEN)) {
           throw new Error('EMAIL_DELIVERY_URL (HTTPS) and EMAIL_DELIVERY_TOKEN are required in production.');
         }
+        const cookieSecure = environment.COOKIE_SECURE === 'true';
+        const cookieSameSite = (environment.COOKIE_SAME_SITE ?? 'lax').toLowerCase();
+        if (!['lax', 'strict', 'none'].includes(cookieSameSite)) throw new Error('COOKIE_SAME_SITE must be lax, strict or none.');
+        if ((isProduction && !cookieSecure) || (cookieSameSite === 'none' && !cookieSecure)) throw new Error('COOKIE_SECURE is required in production and with COOKIE_SAME_SITE=none.');
         return {
           ...environment,
           SECRET_KEY: environment.SECRET_KEY ?? 'test-only-secret',
@@ -44,6 +48,10 @@ import { BillingModule } from './billing/billing.module';
           RATE_LIMIT_WINDOW_SECONDS: Number(environment.RATE_LIMIT_WINDOW_SECONDS ?? 60),
           CORS_ORIGINS: environment.CORS_ORIGINS ?? 'http://localhost:3000',
           FRONTEND_URL: environment.FRONTEND_URL ?? 'http://localhost:3000',
+          REFRESH_COOKIE_NAME: environment.REFRESH_COOKIE_NAME ?? 'refresh_token',
+          CSRF_COOKIE_NAME: environment.CSRF_COOKIE_NAME ?? 'csrf_token',
+          COOKIE_SECURE: cookieSecure,
+          COOKIE_SAME_SITE: cookieSameSite,
         };
       },
     }),
