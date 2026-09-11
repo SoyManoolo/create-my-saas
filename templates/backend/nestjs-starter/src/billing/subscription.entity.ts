@@ -1,0 +1,5 @@
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
+import { randomUUID } from 'node:crypto';
+const dateType: 'datetime' | 'timestamptz' = process.env.NODE_ENV === 'test' ? 'datetime' : 'timestamptz';
+@Entity({ name: 'subscriptions' })
+export class Subscription { @PrimaryColumn('uuid') id!: string; @Column({ name: 'organization_id', type: 'uuid', unique: true }) organizationId!: string; @Column({ default: 'free' }) plan!: string; @Column({ default: 'active' }) status!: string; @Column({ name: 'provider_subscription_id', type: 'varchar', nullable: true, unique: true }) providerSubscriptionId!: string | null; @Column({ name: 'current_period_end', type: dateType, nullable: true }) currentPeriodEnd!: Date | null; @Column({ name: 'cancel_at_period_end', default: false }) cancelAtPeriodEnd!: boolean; @Column({ name: 'created_at', type: dateType, default: () => 'CURRENT_TIMESTAMP' }) createdAt!: Date; @Column({ name: 'updated_at', type: dateType, default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' }) updatedAt!: Date; @BeforeInsert() assignId(): void { this.id ??= randomUUID(); } }
