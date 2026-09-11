@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.exceptions import AppError
-from db.database import get_db
-from modules.auth.security.tokens import get_current_user, opaque_token, token_hash, utc_now
-from modules.users.model import Invitation, Membership, MembershipRole, Organization, User
+from src.core.exceptions import AppError
+from src.core.email import send_secure_email
+from src.db.database import get_db
+from src.modules.auth.security.tokens import get_current_user, opaque_token, token_hash, utc_now
+from src.modules.users.model import Invitation, Membership, MembershipRole, Organization, User
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 class OrganizationCreate(BaseModel): name: str = Field(min_length=1, max_length=160); slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,158}[a-z0-9]$")
@@ -42,12 +43,15 @@ async def list_members(org_id: UUID, user: User = Depends(get_current_user), db:
 @router.post("/{org_id}/invitations", status_code=201)
 async def invite(org_id: UUID, payload: InviteCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await require_role(org_id, user, db, {MembershipRole.OWNER, MembershipRole.ADMIN})
+    if payload.role == MembershipRole.OWNER:
+        raise AppError("Owner invitations are not permitted.", code="OWNER_ROLE_PROTECTED", status_code=400)
     raw = opaque_token(); invite = Invitation(organization_id=org_id, email=str(payload.email).lower(), role=payload.role.value, token_hash=token_hash(raw), expires_at=utc_now() + timedelta(days=7), invited_by_id=user.id); db.add(invite); await db.commit()
-    return {"id": str(invite.id), "accepted": False, "invite_token": raw} # mail adapter owns delivery in production
+    await send_secure_email(recipient=str(payload.email), subject="Organization invitation", body=f"Use this one-time invitation token: {raw}")
+    return {"id": str(invite.id), "accepted": False}
 @router.post("/invitations/accept", status_code=204)
 async def accept_invitation(payload: AcceptInvite, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     invitation = (await db.execute(select(Invitation).where(Invitation.token_hash == token_hash(payload.token)))).scalar_one_or_none()
-    if not invitation or invitation.accepted_at or invitation.expires_at <= utc_now() or invitation.email != user.email: raise AppError("Invitation is invalid or expired.", code="INVALID_INVITATION", status_code=400)
+    if not invitation or invitation.accepted_at or invitation.expires_at <= utc_now() or invitation.email != user.email or invitation.role == MembershipRole.OWNER.value: raise AppError("Invitation is invalid or expired.", code="INVALID_INVITATION", status_code=400)
     already = (await db.execute(select(Membership).where(Membership.organization_id == invitation.organization_id, Membership.user_id == user.id))).scalar_one_or_none()
     if not already: db.add(Membership(organization_id=invitation.organization_id, user_id=user.id, role=invitation.role))
     invitation.accepted_at = utc_now(); await db.commit(); return None
@@ -56,7 +60,8 @@ async def update_member_role(org_id: UUID, member_id: UUID, payload: MembershipU
     await require_role(org_id, user, db, {MembershipRole.OWNER, MembershipRole.ADMIN})
     target = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.id == member_id))).scalar_one_or_none()
     if not target: raise AppError("Membership was not found.", code="MEMBERSHIP_NOT_FOUND", status_code=404)
-    if target.role == MembershipRole.OWNER.value and user.id != target.user_id: raise AppError("An owner role cannot be changed by an administrator.", code="INSUFFICIENT_ROLE", status_code=403)
+    if target.role == MembershipRole.OWNER.value or payload.role == MembershipRole.OWNER:
+        raise AppError("Owner role cannot be changed through this endpoint.", code="OWNER_ROLE_PROTECTED", status_code=400)
     target.role = payload.role.value; await db.commit(); return None
 @router.delete("/{org_id}/members/{member_id}", status_code=204)
 async def remove_member(org_id: UUID, member_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
