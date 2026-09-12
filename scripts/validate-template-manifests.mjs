@@ -8,9 +8,10 @@ const versionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const capabilityPattern = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
 const environmentPattern = /^[A-Z][A-Z0-9_]*$/;
 const allowedTopLevelFields = new Set([
-  '$schema', 'schemaVersion', 'id', 'version', 'kind', 'displayName', 'description', 'runtime', 'capabilities', 'environment',
+  '$schema', 'schemaVersion', 'id', 'version', 'kind', 'displayName', 'description', 'runtime', 'capabilities', 'development', 'environment',
 ]);
 const allowedRuntimeFields = new Set(['language', 'version', 'packageManager']);
+const allowedDevelopmentFields = new Set(['port', 'baseUrl']);
 const allowedEnvironmentFields = new Set(['required']);
 const allowedVariableFields = new Set(['name', 'secret', 'description']);
 
@@ -67,6 +68,17 @@ function validateManifest(file, manifest) {
       if (typeof capability !== 'string' || !capabilityPattern.test(capability)) fail(file, 'capabilities must use dot-separated lowercase identifiers.');
       if (capabilities.has(capability)) fail(file, `capabilities contains duplicate "${capability}".`);
       capabilities.add(capability);
+    }
+  }
+
+  if (manifest.kind === 'backend' && !manifest.development) fail(file, 'backend templates must declare development settings.');
+  if (manifest.development !== undefined) {
+    if (!manifest.development || Array.isArray(manifest.development) || typeof manifest.development !== 'object') {
+      fail(file, 'development must be an object.');
+    } else {
+      hasOnlyKeys(file, manifest.development, allowedDevelopmentFields, 'development');
+      if (!Number.isInteger(manifest.development.port) || manifest.development.port < 1 || manifest.development.port > 65535) fail(file, 'development.port must be a valid TCP port.');
+      if (typeof manifest.development.baseUrl !== 'string' || !/^https?:\/\/[^/]+(?:\/.*)?$/.test(manifest.development.baseUrl)) fail(file, 'development.baseUrl must be an absolute HTTP(S) URL.');
     }
   }
 

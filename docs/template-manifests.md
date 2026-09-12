@@ -23,6 +23,7 @@ Required fields:
 | `displayName`, `description` | Human-readable labels for the CLI's selection UI. |
 | `runtime` | Language, package manager, and optionally a runtime version requirement. |
 | `capabilities` | Unique, dot-separated feature identifiers exposed by the template. |
+| `development` | Local port and base URL. Backends must provide it so the generator can configure a selected frontend without hard-coding framework names. |
 | `environment.required` | Values the generated application must explicitly configure. `secret` tells the CLI never to print or commit the value. |
 
 Capabilities describe implemented application behavior, not planned work or a

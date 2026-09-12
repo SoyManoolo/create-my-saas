@@ -49,6 +49,15 @@
         "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$"
       }
     },
+    "development": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["port", "baseUrl"],
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "baseUrl": { "type": "string", "pattern": "^https?://[^/]+(?:/.*)?$" }
+      }
+    },
     "environment": {
       "type": "object",
       "additionalProperties": false,

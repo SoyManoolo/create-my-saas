@@ -27,6 +27,10 @@
     "security.rate-limiting",
     "email.transactional"
   ],
+  "development": {
+    "port": 3001,
+    "baseUrl": "http://localhost:3001"
+  },
   "environment": {
     "required": [
       {
