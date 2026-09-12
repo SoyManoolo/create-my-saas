@@ -10,10 +10,8 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "pwdlib[argon2]>=0.3.0",
     "pyjwt>=2.13.0",
+    "redis>=5.2",
     "sqlalchemy>=2.0.51",
     "structlog>=26.1.0",
     "uuid6>=2025.0.1",
 ]
-
-[project.optional-dependencies]
-rate-limit = ["redis>=5.2"]

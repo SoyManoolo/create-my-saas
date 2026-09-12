@@ -12,7 +12,7 @@ export class RateLimitService {
   constructor(private readonly config: ConfigService) {}
   async consume(key: string, limit?: number, windowSeconds?: number): Promise<boolean> {
     if (!this.config.get<boolean>('RATE_LIMIT_ENABLED', true)) return true;
-    const max = limit ?? this.config.get<number>('RATE_LIMIT_MAX', 30);
+    const max = limit ?? this.config.get<number>('RATE_LIMIT_REQUESTS', 30);
     const window = (windowSeconds ?? this.config.get<number>('RATE_LIMIT_WINDOW_SECONDS', 60)) * 1000;
     const redis = await this.consumeRedis(key, max, windowSeconds ?? this.config.get<number>('RATE_LIMIT_WINDOW_SECONDS', 60));
     if (redis !== null) return redis;
@@ -31,7 +31,7 @@ export class RateLimitService {
     try {
       const target = new URL(url);
       if (!['redis:', 'rediss:'].includes(target.protocol)) return null;
-      const redisKey = `rate-limit:${key}`;
+      const redisKey = `${this.config.get<string>('RATE_LIMIT_PREFIX', 'rate-limit')}:${key}`;
       const command = (parts: string[]): string => `*${parts.length}\r\n${parts.map((part) => `$${Buffer.byteLength(part)}\r\n${part}\r\n`).join('')}`;
       const script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; return count";
       const increment = command(['EVAL', script, '1', redisKey, String(windowSeconds)]);

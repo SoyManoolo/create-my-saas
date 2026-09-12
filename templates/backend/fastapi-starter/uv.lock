@@ -340,14 +340,10 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pwdlib", extra = ["argon2"] },
     { name = "pyjwt" },
+    { name = "redis" },
     { name = "sqlalchemy" },
     { name = "structlog" },
     { name = "uuid6" },
-]
-
-[package.optional-dependencies]
-rate-limit = [
-    { name = "redis" },
 ]
 
 [package.metadata]
@@ -359,12 +355,11 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
     { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.0" },
     { name = "pyjwt", specifier = ">=2.13.0" },
-    { name = "redis", marker = "extra == 'rate-limit'", specifier = ">=5.2" },
+    { name = "redis", specifier = ">=5.2" },
     { name = "sqlalchemy", specifier = ">=2.0.51" },
     { name = "structlog", specifier = ">=26.1.0" },
     { name = "uuid6", specifier = ">=2025.0.1" },
 ]
-provides-extras = ["rate-limit"]
 
 [[package]]
 name = "fastar"

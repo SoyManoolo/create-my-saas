@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from src.modules.auth.router import router as auth_router
 from src.modules.auth.oauth import router as oauth_router
 from src.modules.users.router import router as users_router
@@ -12,13 +13,17 @@ from src.core.exceptions import AppError
 from src.core.exception_handlers import app_error_handler, request_validation_error_handler
 from src.core.logging import configure_logging
 from src.core.middleware import RequestContextMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
+from src.db.database import close_database
 
 configure_logging()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings.validate()
-    yield
+    try:
+        yield
+    finally:
+        await close_database()
 
 
 is_production = settings.environment in {"production", "staging"}
@@ -35,6 +40,10 @@ app.add_middleware(
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+# Forwarded headers are accepted only from the explicit reverse proxies above.
+# This middleware must wrap the limiter so request.client is the validated client IP.
+if settings.trust_proxy_headers:
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxy_ips)
 
 @app.get("/")
 def read_root():

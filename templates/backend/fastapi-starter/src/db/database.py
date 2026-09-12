@@ -19,3 +19,8 @@ SessionLocal = async_sessionmaker(
 async def get_db():
     async with SessionLocal() as db:
         yield db
+
+
+async def close_database() -> None:
+    """Release asyncpg connections during application shutdown."""
+    await engine.dispose()

@@ -8,7 +8,9 @@ def _bool(name: str, default: bool = False) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    environment: str = os.getenv("APP_ENV", "development").strip().lower()
+    # APP_ENV is the cross-backend name. NODE_ENV remains an alias so existing
+    # deployment manifests keep working while they are migrated.
+    environment: str = os.getenv("APP_ENV", os.getenv("NODE_ENV", "development")).strip().lower()
     database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/app")
     database_ssl: bool = _bool("DATABASE_SSL")
     secret_key: str = os.getenv("SECRET_KEY", "development-only-secret-not-for-production-32b")
@@ -25,8 +27,11 @@ class Settings:
     cors_origins_raw: str = os.getenv("CORS_ORIGINS", os.getenv("FRONTEND_URL", "http://localhost:3000"))
     redis_url: str | None = os.getenv("REDIS_URL")
     rate_limit_enabled: bool = _bool("RATE_LIMIT_ENABLED", True)
-    rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", "30"))
+    rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", os.getenv("RATE_LIMIT_MAX", "30")))
     rate_limit_window_seconds: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    rate_limit_prefix: str = os.getenv("RATE_LIMIT_PREFIX", "rate-limit").strip() or "rate-limit"
+    trust_proxy_headers: bool = _bool("TRUST_PROXY_HEADERS")
+    trusted_proxy_ips_raw: str = os.getenv("TRUSTED_PROXY_IPS", "")
     oauth_enabled: bool = _bool("OAUTH_ENABLED")
     oauth_callback_base_url: str = os.getenv("OAUTH_CALLBACK_BASE_URL", "http://localhost:8000")
     smtp_host: str | None = os.getenv("SMTP_HOST")
@@ -41,10 +46,23 @@ class Settings:
         return [origin.strip().rstrip("/") for origin in self.cors_origins_raw.split(",") if origin.strip()]
 
     @property
+    def trusted_proxy_ips(self) -> list[str]:
+        return [address.strip() for address in self.trusted_proxy_ips_raw.split(",") if address.strip()]
+
+    @property
     def smtp_configured(self) -> bool:
         return all((self.smtp_host, self.smtp_username, self.smtp_password, self.smtp_from))
 
     def validate(self) -> None:
+        database_scheme = urlparse(self.database_url).scheme
+        if database_scheme != "postgresql+asyncpg":
+            raise RuntimeError("DATABASE_URL must use the postgresql+asyncpg driver.")
+        if self.rate_limit_requests < 1 or self.rate_limit_window_seconds < 1:
+            raise RuntimeError("RATE_LIMIT_REQUESTS and RATE_LIMIT_WINDOW_SECONDS must be positive integers.")
+        if self.trust_proxy_headers and not self.trusted_proxy_ips:
+            raise RuntimeError("TRUSTED_PROXY_IPS is required when TRUST_PROXY_HEADERS is enabled.")
+        if "*" in self.trusted_proxy_ips:
+            raise RuntimeError("TRUSTED_PROXY_IPS must list explicit proxy addresses; '*' is not allowed.")
         if self.environment not in {"production", "staging"}:
             return
         if len(self.secret_key) < 32 or self.secret_key in {"development-only-secret-not-for-production-32b", "change-me-in-production", "replace-with-a-long-random-secret"}:

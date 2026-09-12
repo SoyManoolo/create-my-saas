@@ -1,6 +1,6 @@
 from uuid import uuid4
 from collections import defaultdict, deque
-from time import monotonic
+from time import monotonic, time
 
 import structlog
 from fastapi import Request
@@ -36,8 +36,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Configurable in-memory fallback.  Redis is deliberately optional for this starter.
-    Production deployments should use an edge rate limiter or replace this store with Redis."""
+    """A Redis-backed, cross-worker limiter with a development-only local fallback."""
     def __init__(self, app):
         super().__init__(app); self.requests: dict[str, deque[float]] = defaultdict(deque)
         self.redis = redis_from_url(settings.redis_url, decode_responses=True) if settings.redis_url and redis_from_url else None
@@ -45,17 +44,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not settings.rate_limit_enabled or request.url.path in {"/health", "/docs", "/openapi.json"}:
             return await call_next(request)
-        # Do not trust a client-supplied X-Forwarded-For header.  A reverse proxy
-        # must enforce rate limiting itself or provide a separately trusted channel.
+        # ProxyHeadersMiddleware rewrites client only when its immediate peer is
+        # listed in TRUSTED_PROXY_IPS. Otherwise this remains the socket address.
         key = request.client.host if request.client else "unknown"
         if settings.environment in {"production", "staging"} and not self.redis:
             return JSONResponse(status_code=503, content={"error": {"code": "RATE_LIMIT_UNAVAILABLE", "message": "Request limiting is temporarily unavailable."}}, headers={"Retry-After": "60"})
         if self.redis:
-            # Atomic increment plus a first-write expiry makes the limit shared across workers.
-            redis_key = f"rate-limit:{key}:{int(monotonic() // settings.rate_limit_window_seconds)}"
+            # Wall-clock windows make a Redis key stable across processes and hosts.
+            redis_key = f"{settings.rate_limit_prefix}:{key}:{int(time() // settings.rate_limit_window_seconds)}"
             try:
-                count = await self.redis.incr(redis_key)
-                if count == 1: await self.redis.expire(redis_key, settings.rate_limit_window_seconds)
+                # The expiry is established atomically with the increment. A
+                # process crash cannot leave an unbounded counter behind.
+                count = await self.redis.eval(
+                    "local count = redis.call('INCR', KEYS[1]); "
+                    "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; "
+                    "return count",
+                    1,
+                    redis_key,
+                    settings.rate_limit_window_seconds,
+                )
             except Exception:
                 if settings.environment in {"production", "staging"}:
                     return JSONResponse(status_code=503, content={"error": {"code": "RATE_LIMIT_UNAVAILABLE", "message": "Request limiting is temporarily unavailable."}}, headers={"Retry-After": "60"})

@@ -15,8 +15,9 @@ const environmentBoolean = (value: string | undefined): boolean => ['1', 'true',
     ConfigModule.forRoot({
       isGlobal: true,
       validate: (environment: Record<string, string | undefined>) => {
-        const isTest = environment.NODE_ENV === 'test';
-        const isProduction = environment.NODE_ENV === 'production' || environment.NODE_ENV === 'staging';
+        const appEnvironment = environment.APP_ENV ?? environment.NODE_ENV ?? 'development';
+        const isTest = appEnvironment === 'test';
+        const isProduction = appEnvironment === 'production' || appEnvironment === 'staging';
         const required = ['SECRET_KEY', ...(isTest ? [] : ['DATABASE_URL'])];
         for (const name of required) {
           if (!environment[name]) {
@@ -44,8 +45,16 @@ const environmentBoolean = (value: string | undefined): boolean => ['1', 'true',
         if (isProduction && (!environment.REDIS_URL?.startsWith('rediss://') || !environmentBoolean(environment.RATE_LIMIT_ENABLED))) {
           throw new Error('RATE_LIMIT_ENABLED and a TLS REDIS_URL (rediss://) are required in production.');
         }
+        if (environmentBoolean(environment.TRUST_PROXY_HEADERS) && !environment.TRUSTED_PROXY_IPS?.trim()) {
+          throw new Error('TRUSTED_PROXY_IPS is required when TRUST_PROXY_HEADERS is enabled.');
+        }
+        if (environment.TRUSTED_PROXY_IPS?.split(',').map((value) => value.trim()).includes('*')) {
+          throw new Error("TRUSTED_PROXY_IPS must list explicit proxy addresses; '*' is not allowed.");
+        }
         return {
           ...environment,
+          APP_ENV: appEnvironment,
+          NODE_ENV: appEnvironment,
           SECRET_KEY: environment.SECRET_KEY ?? 'test-only-secret',
           JWT_ALGORITHM: environment.JWT_ALGORITHM ?? 'HS256',
           JWT_ISSUER: environment.JWT_ISSUER ?? 'nestjs-starter',
@@ -54,8 +63,9 @@ const environmentBoolean = (value: string | undefined): boolean => ['1', 'true',
           REFRESH_TOKEN_EXPIRE_DAYS: Number(environment.REFRESH_TOKEN_EXPIRE_DAYS ?? 30),
           PASSWORD_RESET_EXPIRE_MINUTES: Number(environment.PASSWORD_RESET_EXPIRE_MINUTES ?? 60),
           EMAIL_VERIFICATION_EXPIRE_MINUTES: Number(environment.EMAIL_VERIFICATION_EXPIRE_MINUTES ?? 1440),
-          RATE_LIMIT_MAX: Number(environment.RATE_LIMIT_MAX ?? 30),
+          RATE_LIMIT_REQUESTS: Number(environment.RATE_LIMIT_REQUESTS ?? environment.RATE_LIMIT_MAX ?? 30),
           RATE_LIMIT_WINDOW_SECONDS: Number(environment.RATE_LIMIT_WINDOW_SECONDS ?? 60),
+          RATE_LIMIT_PREFIX: environment.RATE_LIMIT_PREFIX?.trim() || 'rate-limit',
           RATE_LIMIT_ENABLED: environmentBoolean(environment.RATE_LIMIT_ENABLED),
           CORS_ORIGINS: environment.CORS_ORIGINS ?? 'http://localhost:3000',
           FRONTEND_URL: environment.FRONTEND_URL ?? 'http://localhost:3000',
