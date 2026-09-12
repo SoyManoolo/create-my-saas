@@ -35,6 +35,9 @@ The `accessToken` is never persisted by the supplied contract: do not write it
 to `localStorage`, a cookie, or server-rendered HTML. In production set
 `COOKIE_SECURE=true` and use HTTPS origins in `CORS_ORIGINS`.
 
+Every failed API response uses `{ "error": { "code", "message" } }`, matching
+the other backend starters.
+
 The included migration creates only users and refreshable browser sessions. Add
 your own domain tables and migrations rather than storing application data in a
 cookie or process memory.

@@ -30,8 +30,12 @@ function opaqueToken(): string {
   return randomBytes(48).toString('base64url');
 }
 
+function sendError(reply: FastifyReply, statusCode: number, code: string, message: string) {
+  return reply.code(statusCode).send({ error: { code, message } });
+}
+
 function unauthorized(reply: FastifyReply, code = 'UNAUTHORIZED') {
-  return reply.code(401).send({ code, message: 'Authentication is required.' });
+  return sendError(reply, 401, code, 'Authentication is required.');
 }
 
 function requireCsrf(request: FastifyRequest, reply: FastifyReply, config: Config): boolean {
@@ -39,7 +43,7 @@ function requireCsrf(request: FastifyRequest, reply: FastifyReply, config: Confi
   const headerValue = request.headers['x-csrf-token'];
   const supplied = typeof headerValue === 'string' ? headerValue : '';
   if (!cookieValue || cookieValue.length !== supplied.length || !timingSafeEqual(Buffer.from(cookieValue), Buffer.from(supplied))) {
-    reply.code(403).send({ code: 'INVALID_CSRF_TOKEN', message: 'CSRF token is missing or invalid.' });
+    sendError(reply, 403, 'INVALID_CSRF_TOKEN', 'CSRF token is missing or invalid.');
     return false;
   }
   return true;
@@ -56,13 +60,13 @@ export async function createApp({ config, repository }: AppDependencies): Promis
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
-      return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'The request body is invalid.' });
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'The request body is invalid.');
     }
     if ((error as { code?: string }).code === '23505') {
-      return reply.code(409).send({ code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists.' });
+      return sendError(reply, 409, 'EMAIL_ALREADY_EXISTS', 'An account with this email already exists.');
     }
     app.log.error(error);
-    return reply.code(500).send({ code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' });
+    return sendError(reply, 500, 'INTERNAL_ERROR', 'An unexpected error occurred.');
   });
 
   const cookieOptions = (httpOnly: boolean, path: string, maxAge: number) => ({
@@ -102,7 +106,7 @@ export async function createApp({ config, repository }: AppDependencies): Promis
     const body = registerBody.parse(request.body);
     const email = body.email.toLowerCase();
     if (await repository.findUserByEmail(email)) {
-      return reply.code(409).send({ code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists.' });
+      return sendError(reply, 409, 'EMAIL_ALREADY_EXISTS', 'An account with this email already exists.');
     }
     const user = await repository.createUser({ email, name: body.name, passwordHash: await argon2.hash(body.password, { type: argon2.argon2id }) });
     return reply.code(201).send({ user: toPublicUser(user) });
@@ -112,7 +116,7 @@ export async function createApp({ config, repository }: AppDependencies): Promis
     const body = loginBody.parse(request.body);
     const user = await repository.findUserByEmail(body.email.toLowerCase());
     if (!user || !(await argon2.verify(user.passwordHash, body.password))) {
-      return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'The email or password is incorrect.' });
+      return sendError(reply, 401, 'INVALID_CREDENTIALS', 'The email or password is incorrect.');
     }
     const session = await issueSession(user);
     setSessionCookies(reply, session.refreshToken);

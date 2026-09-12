@@ -92,6 +92,9 @@ test('browser session contract returns an in-memory access token but never a ref
 
     const rejectedRefresh = await app.inject({ method: 'POST', url: '/auth/refresh', headers: { cookie: `${refresh}; ${csrf}` } });
     assert.equal(rejectedRefresh.statusCode, 403);
+    assert.deepEqual(rejectedRefresh.json(), {
+      error: { code: 'INVALID_CSRF_TOKEN', message: 'CSRF token is missing or invalid.' },
+    });
     const refreshed = await app.inject({ method: 'POST', url: '/auth/refresh', headers: { cookie: `${refresh}; ${csrf}`, 'x-csrf-token': csrf.split('=', 2)[1] } });
     assert.equal(refreshed.statusCode, 200);
     assert.deepEqual(Object.keys(refreshed.json()).sort(), ['accessToken', 'user']);
