@@ -22,6 +22,8 @@ function readTemplateManifest(templatesDirectory, kind, directoryName) {
     || typeof manifest.version !== 'string'
     || manifest.kind !== kind
     || !Array.isArray(manifest.capabilities)
+    || (kind === 'backend'
+      && (typeof manifest.development?.baseUrl !== 'string' || !manifest.development.baseUrl))
   ) {
     throw new Error(`Invalid template manifest: ${manifestPath}`);
   }

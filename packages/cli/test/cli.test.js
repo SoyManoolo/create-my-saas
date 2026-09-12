@@ -53,6 +53,9 @@ test('generates selected templates and omits local artifacts', (t) => {
   assert.equal(existsSync(join(destination, 'backend', '__pycache__')), false);
   assert.equal(existsSync(join(destination, 'frontend', 'node_modules')), false);
 
+  const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
+  assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:8000$/m);
+
   const metadata = JSON.parse(readFileSync(join(destination, '.create-my-saas.json'), 'utf8'));
   assert.deepEqual(metadata.templates.backend, {
     id: 'backend:fastapi', version: '0.1.0', source: 'backend/fastapi-starter',

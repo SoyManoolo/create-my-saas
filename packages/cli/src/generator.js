@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
 
@@ -43,6 +43,25 @@ function copyTemplate(templatesDirectory, destinationDirectory, kind, template) 
   });
 }
 
+function configureFrontendApiProxyTarget(destinationDirectory, backend) {
+  const envExamplePath = join(destinationDirectory, 'frontend', '.env.example');
+  if (!existsSync(envExamplePath)) {
+    throw new Error(`Frontend template is missing .env.example: ${envExamplePath}`);
+  }
+
+  const originalContents = readFileSync(envExamplePath, 'utf8');
+  const apiProxyTargetPattern = /^API_PROXY_TARGET=.*$/m;
+  if (!apiProxyTargetPattern.test(originalContents)) {
+    throw new Error(`Frontend .env.example is missing API_PROXY_TARGET: ${envExamplePath}`);
+  }
+
+  const configuredContents = originalContents.replace(
+    apiProxyTargetPattern,
+    () => `API_PROXY_TARGET=${backend.development.baseUrl}`,
+  );
+  writeFileSync(envExamplePath, configuredContents, 'utf8');
+}
+
 export function generateProject({
   destination,
   backendId,
@@ -72,6 +91,10 @@ export function generateProject({
 
     if (frontend) {
       copyTemplate(templatesDirectory, outputDirectory, 'frontend', frontend);
+    }
+
+    if (backend && frontend) {
+      configureFrontendApiProxyTarget(outputDirectory, backend);
     }
 
     const selectedTemplates = {};

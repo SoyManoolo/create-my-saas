@@ -1,0 +1,37 @@
+{
+  "name": "create-my-saas",
+  "version": "0.1.0",
+  "description": "Generate a SaaS project from versioned backend and frontend starter templates.",
+  "type": "module",
+  "bin": {
+    "create-my-saas": "./packages/cli/bin/create-my-saas.js"
+  },
+  "files": [
+    "packages/cli",
+    "templates",
+    "docs",
+    "README.md",
+    "!templates/**/.next",
+    "!templates/**/.pnpm-store",
+    "!templates/**/.pytest_cache",
+    "!templates/**/.ruff_cache",
+    "!templates/**/.turbo",
+    "!templates/**/.uv-validation-cache",
+    "!templates/**/.venv",
+    "!templates/**/__pycache__",
+    "!templates/**/build",
+    "!templates/**/coverage",
+    "!templates/**/dist",
+    "!templates/**/node_modules",
+    "!templates/**/*.pyc",
+    "!templates/**/*.tsbuildinfo"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test packages/cli/test/*.test.js",
+    "test:cli": "node --test packages/cli/test/*.test.js",
+    "validate:templates": "node scripts/validate-template-manifests.mjs"
+  }
+}

@@ -1,0 +1,16 @@
+# Never distribute local dependency, virtual environment, cache, or build output
+# embedded in a starter directory. The generator copies source templates only.
+templates/**/.next/
+templates/**/.pnpm-store/
+templates/**/.pytest_cache/
+templates/**/.ruff_cache/
+templates/**/.turbo/
+templates/**/.uv-validation-cache/
+templates/**/.venv/
+templates/**/__pycache__/
+templates/**/build/
+templates/**/coverage/
+templates/**/dist/
+templates/**/node_modules/
+templates/**/*.pyc
+templates/**/*.tsbuildinfo
