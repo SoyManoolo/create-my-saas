@@ -20,15 +20,23 @@ jobs:
         run: node --test packages/cli/test/*.test.js
 
   generated-projects:
-    name: Generated ${{ matrix.backend }} and Next.js starter
+    name: Generated ${{ matrix.backend }} and ${{ matrix.frontend }} starter
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - backend: fastapi
+            frontend: nextjs
+            api_port: 8000
+          - backend: fastapi
+            frontend: react-router
             api_port: 8000
           - backend: nestjs
+            frontend: nextjs
+            api_port: 3001
+          - backend: nestjs
+            frontend: react-router
             api_port: 3001
     steps:
       - uses: actions/checkout@v4
@@ -38,13 +46,33 @@ jobs:
       - name: Generate selected combination
         run: >-
           node packages/cli/bin/create-my-saas.js
-          "$RUNNER_TEMP/${{ matrix.backend }}-nextjs"
-          --backend "${{ matrix.backend }}" --frontend nextjs
+          "$RUNNER_TEMP/${{ matrix.backend }}-${{ matrix.frontend }}"
+          --backend "${{ matrix.backend }}" --frontend "${{ matrix.frontend }}"
       - name: Verify generated metadata and proxy target
         run: |
-          project="$RUNNER_TEMP/${{ matrix.backend }}-nextjs"
+          project="$RUNNER_TEMP/${{ matrix.backend }}-${{ matrix.frontend }}"
           test -f "$project/.create-my-saas.json"
           grep -Fx "API_PROXY_TARGET=http://localhost:${{ matrix.api_port }}" "$project/frontend/.env.example"
+
+  generated-static-site:
+    name: Generated Astro public site and Fastify API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Generate static frontend with a compatible API
+        run: >-
+          node packages/cli/bin/create-my-saas.js
+          "$RUNNER_TEMP/astro-public-site" --backend fastify --frontend astro
+      - name: Verify static project configuration
+        run: |
+          project="$RUNNER_TEMP/astro-public-site"
+          test -f "$project/.create-my-saas.json"
+          grep -Fx "PUBLIC_SITE_URL=https://example.com" "$project/frontend/.env.example"
+          test -f "$project/frontend/src/pages/index.astro"
+          test -f "$project/backend/src/app.ts"
 
   nestjs:
     name: NestJS starter
@@ -132,3 +160,77 @@ jobs:
           version: 11
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
+
+  react-router:
+    name: React Router starter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/frontend/react-router-starter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+
+  astro:
+    name: Astro starter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/frontend/astro-starter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm run build
+
+  fastify:
+    name: Fastify starter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/backend/fastify-starter
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: fastify_starter
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fastify_starter"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fastify_starter
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run db:migrate
+      - run: pnpm run test
