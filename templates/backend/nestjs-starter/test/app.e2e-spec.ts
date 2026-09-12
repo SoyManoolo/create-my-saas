@@ -4,14 +4,24 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApplication } from './../src/app.setup';
+import { SecureEmailService } from './../src/auth/secure-email.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
+  let deliveries: Array<{ recipient: string; subject: string; text: string }>;
 
   beforeEach(async () => {
+    deliveries = [];
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(SecureEmailService)
+      .useValue({
+        send: async (recipient: string, subject: string, text: string) => {
+          deliveries.push({ recipient, subject, text });
+        },
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     configureApplication(app);
@@ -55,6 +65,8 @@ describe('AppController (e2e)', () => {
 
     expect(loginResponse.body.accessToken).toEqual(expect.any(String));
     expect(loginResponse.body.refreshToken).toBeUndefined();
+    expect(loginResponse.headers['cache-control']).toBe('no-store');
+    expect(loginResponse.headers.pragma).toBe('no-cache');
     const cookieHeader = loginResponse.headers['set-cookie'];
     const cookies = Array.isArray(cookieHeader) ? cookieHeader : cookieHeader ? [cookieHeader] : [];
     expect(cookies.find((cookie) => cookie.startsWith('refresh_token='))).toMatch(/(?:^|;\s*)Path=\/auth(?:;|$)/);
@@ -113,6 +125,73 @@ describe('AppController (e2e)', () => {
     await agent.post('/auth/logout').expect(403).expect({ error: { code: 'INVALID_CSRF_TOKEN', message: 'CSRF token is missing or invalid.' } });
   });
 
+  it('does not reflect submitted credentials in validation errors', async () => {
+    const password = 'secret-password1';
+    const response = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'not-an-email', password })
+      .expect(400);
+
+    expect(JSON.stringify(response.body)).not.toContain(password);
+  });
+
+  it('rotates refresh credentials and revokes every session when a rotated credential is reused', async () => {
+    const credentials = { email: 'rotation@example.com', password: 'password123', name: 'Rotation' };
+    await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
+    const login = await request(app.getHttpServer()).post('/auth/login').send(loginPayload(credentials)).expect(200);
+    const first = cookieValues(login);
+
+    const rotated = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', first.header)
+      .set('X-CSRF-Token', first.csrf)
+      .expect(200);
+    const second = cookieValues(rotated);
+    expect(second.refresh).not.toBe(first.refresh);
+
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', first.header)
+      .set('X-CSRF-Token', first.csrf)
+      .expect(401)
+      .expect({ error: { code: 'REFRESH_TOKEN_REUSED', message: 'The refresh token was already used; all sessions were revoked.' } });
+
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', second.header)
+      .set('X-CSRF-Token', second.csrf)
+      .expect(401)
+      .expect({ error: { code: 'INVALID_REFRESH_TOKEN', message: 'The refresh token is invalid or expired.' } });
+  });
+
+  it('keeps reset delivery indistinguishable and consumes verification and reset tokens exactly once', async () => {
+    const credentials = { email: 'recovery@example.com', password: 'password123', name: 'Recovery' };
+    const registration = await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
+    const verificationToken = tokenFrom(deliveries.at(-1)?.text);
+    expect(JSON.stringify(registration.body)).not.toContain(verificationToken);
+
+    await request(app.getHttpServer()).post('/auth/email/verify').send({ token: verificationToken }).expect(204);
+    await request(app.getHttpServer())
+      .post('/auth/email/verify')
+      .send({ token: verificationToken })
+      .expect(400)
+      .expect({ error: { code: 'INVALID_TOKEN', message: 'The token is invalid or expired.' } });
+
+    await request(app.getHttpServer()).post('/auth/password/reset/request').send({ email: credentials.email }).expect(204);
+    const resetToken = tokenFrom(deliveries.at(-1)?.text);
+    await request(app.getHttpServer()).post('/auth/password/reset/request').send({ email: 'missing@example.com' }).expect(204);
+    expect(deliveries).toHaveLength(2);
+
+    await request(app.getHttpServer()).post('/auth/password/reset/confirm').send({ token: resetToken, newPassword: 'new-password1' }).expect(204);
+    await request(app.getHttpServer())
+      .post('/auth/password/reset/confirm')
+      .send({ token: resetToken, newPassword: 'new-password1' })
+      .expect(400)
+      .expect({ error: { code: 'INVALID_TOKEN', message: 'The token is invalid or expired.' } });
+    await request(app.getHttpServer()).post('/auth/login').send(loginPayload(credentials)).expect(401);
+    await request(app.getHttpServer()).post('/auth/login').send({ ...loginPayload(credentials), password: 'new-password1' }).expect(200);
+  });
+
   it('only advertises Google and GitHub OAuth when fully configured', async () => {
     await request(app.getHttpServer()).get('/auth/oauth/providers').expect(200).expect([
       { provider: 'google', configured: false },
@@ -124,3 +203,27 @@ describe('AppController (e2e)', () => {
     await app?.close();
   });
 });
+
+function cookieValues(response: request.Response): { refresh: string; csrf: string; header: string } {
+  const cookies = response.headers['set-cookie'];
+  const values = Array.isArray(cookies) ? cookies : cookies ? [cookies] : [];
+  const refresh = cookieValue(values, 'refresh_token');
+  const csrf = cookieValue(values, 'csrf_token');
+  return { refresh, csrf, header: `refresh_token=${refresh}; csrf_token=${csrf}` };
+}
+
+function cookieValue(cookies: string[], name: string): string {
+  const value = cookies.find((cookie) => cookie.startsWith(`${name}=`))?.split(';', 1)[0].slice(name.length + 1);
+  if (!value) throw new Error(`${name} cookie was not set`);
+  return value;
+}
+
+function tokenFrom(text: string | undefined): string {
+  const value = text?.match(/[?&]token=([^\s]+)/)?.[1];
+  if (!value) throw new Error('A one-time token was not delivered');
+  return decodeURIComponent(value);
+}
+
+function loginPayload(credentials: { email: string; password: string }): { email: string; password: string } {
+  return { email: credentials.email, password: credentials.password };
+}
