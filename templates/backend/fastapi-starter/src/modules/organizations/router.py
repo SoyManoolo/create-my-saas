@@ -2,7 +2,8 @@ from datetime import timedelta
 from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import AppError
 from src.core.email import send_secure_email
@@ -45,16 +46,96 @@ async def invite(org_id: UUID, payload: InviteCreate, user: User = Depends(get_c
     await require_role(org_id, user, db, {MembershipRole.OWNER, MembershipRole.ADMIN})
     if payload.role == MembershipRole.OWNER:
         raise AppError("Owner invitations are not permitted.", code="OWNER_ROLE_PROTECTED", status_code=400)
-    raw = opaque_token(); invite = Invitation(organization_id=org_id, email=str(payload.email).lower(), role=payload.role.value, token_hash=token_hash(raw), expires_at=utc_now() + timedelta(days=7), invited_by_id=user.id); db.add(invite); await db.commit()
-    await send_secure_email(recipient=str(payload.email), subject="Organization invitation", body=f"Use this one-time invitation token: {raw}")
-    return {"id": str(invite.id), "accepted": False}
+    email = str(payload.email).lower()
+    now = utc_now()
+    raw = opaque_token()
+    values = {
+        "organization_id": org_id,
+        "email": email,
+        "role": payload.role.value,
+        "token_hash": token_hash(raw),
+        "expires_at": now + timedelta(days=7),
+        "invited_by_id": user.id,
+    }
+    created_id = (await db.execute(
+        postgres_insert(Invitation)
+        .values(**values)
+        .on_conflict_do_nothing(
+            index_elements=[Invitation.organization_id, Invitation.email],
+            index_where=(Invitation.accepted_at.is_(None) & Invitation.cancelled_at.is_(None)),
+        )
+        .returning(Invitation.id)
+    )).scalar_one_or_none()
+    deliver = created_id is not None
+    invitation_id = created_id
+
+    if invitation_id is None:
+        # The partial unique index makes this lock cover a single pending invite.
+        # A concurrent caller either waits here or observes the already-created row.
+        invitation = (await db.execute(
+            select(Invitation)
+            .where(
+                Invitation.organization_id == org_id,
+                Invitation.email == email,
+                Invitation.accepted_at.is_(None),
+                Invitation.cancelled_at.is_(None),
+            )
+            .with_for_update()
+        )).scalar_one()
+        invitation_id = invitation.id
+        if invitation.expires_at <= now:
+            invitation.role = payload.role.value
+            invitation.token_hash = values["token_hash"]
+            invitation.expires_at = values["expires_at"]
+            invitation.invited_by_id = user.id
+            deliver = True
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    if deliver:
+        await send_secure_email(recipient=email, subject="Organization invitation", body=f"Use this one-time invitation token: {raw}")
+    return {"id": str(invitation_id), "accepted": False}
 @router.post("/invitations/accept", status_code=204)
 async def accept_invitation(payload: AcceptInvite, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    invitation = (await db.execute(select(Invitation).where(Invitation.token_hash == token_hash(payload.token)))).scalar_one_or_none()
-    if not invitation or invitation.accepted_at or invitation.expires_at <= utc_now() or invitation.email != user.email or invitation.role == MembershipRole.OWNER.value: raise AppError("Invitation is invalid or expired.", code="INVALID_INVITATION", status_code=400)
-    already = (await db.execute(select(Membership).where(Membership.organization_id == invitation.organization_id, Membership.user_id == user.id))).scalar_one_or_none()
-    if not already: db.add(Membership(organization_id=invitation.organization_id, user_id=user.id, role=invitation.role))
-    invitation.accepted_at = utc_now(); await db.commit(); return None
+    now = utc_now()
+    invitation_hash = token_hash(payload.token)
+    accepted = (await db.execute(
+        update(Invitation)
+        .where(
+            Invitation.token_hash == invitation_hash,
+            Invitation.accepted_at.is_(None),
+            Invitation.cancelled_at.is_(None),
+            Invitation.expires_at > now,
+            Invitation.email == user.email,
+            Invitation.role != MembershipRole.OWNER.value,
+        )
+        .values(accepted_at=now)
+        .returning(Invitation.organization_id, Invitation.role)
+    )).one_or_none()
+    if accepted:
+        await db.execute(
+            postgres_insert(Membership)
+            .values(organization_id=accepted.organization_id, user_id=user.id, role=accepted.role)
+            .on_conflict_do_nothing(index_elements=[Membership.organization_id, Membership.user_id])
+        )
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        return None
+
+    # A completed request is deliberately a no-op for the same recipient. This
+    # makes retries and concurrent accepts idempotent without accepting a token
+    # for another account or reviving an expired/cancelled invitation.
+    invitation = (await db.execute(select(Invitation).where(Invitation.token_hash == invitation_hash))).scalar_one_or_none()
+    if invitation and invitation.accepted_at and invitation.email == user.email:
+        return None
+    raise AppError("Invitation is invalid or expired.", code="INVALID_INVITATION", status_code=400)
 @router.patch("/{org_id}/members/{member_id}", status_code=204)
 async def update_member_role(org_id: UUID, member_id: UUID, payload: MembershipUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await require_role(org_id, user, db, {MembershipRole.OWNER, MembershipRole.ADMIN})
