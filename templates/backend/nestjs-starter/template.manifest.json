@@ -1,0 +1,54 @@
+{
+  "$schema": "../../../docs/template-manifest.schema.json",
+  "schemaVersion": 1,
+  "id": "backend:nestjs",
+  "version": "0.1.0",
+  "kind": "backend",
+  "displayName": "NestJS starter",
+  "description": "Modular NestJS SaaS API with PostgreSQL, secure browser sessions, organizations, and billing domain models.",
+  "runtime": {
+    "language": "node",
+    "packageManager": "pnpm"
+  },
+  "capabilities": [
+    "auth.password",
+    "auth.refresh-sessions",
+    "auth.email-verification",
+    "auth.password-recovery",
+    "users.profile",
+    "organizations",
+    "organizations.rbac",
+    "organizations.invitations",
+    "billing.subscription-domain",
+    "oauth.pkce",
+    "database.postgresql",
+    "database.migrations",
+    "security.csrf",
+    "security.rate-limiting",
+    "email.transactional"
+  ],
+  "environment": {
+    "required": [
+      {
+        "name": "DATABASE_URL",
+        "secret": true,
+        "description": "PostgreSQL connection URL."
+      },
+      {
+        "name": "SECRET_KEY",
+        "secret": true,
+        "description": "Long random signing secret for JWTs and one-time tokens."
+      },
+      {
+        "name": "FRONTEND_URL",
+        "secret": false,
+        "description": "Public URL of the selected frontend."
+      },
+      {
+        "name": "CORS_ORIGINS",
+        "secret": false,
+        "description": "Comma-separated browser origins allowed to call the API."
+      }
+    ]
+  }
+}
