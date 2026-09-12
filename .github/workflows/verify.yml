@@ -9,16 +9,42 @@ jobs:
   generator:
     name: Generator CLI
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/cli
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Validate template manifests
+        run: node scripts/validate-template-manifests.mjs
       - name: Run generator tests
-        run: node --test
+        run: node --test packages/cli/test/*.test.js
+
+  generated-projects:
+    name: Generated ${{ matrix.backend }} and Next.js starter
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: fastapi
+            api_port: 8000
+          - backend: nestjs
+            api_port: 3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Generate selected combination
+        run: >-
+          node packages/cli/bin/create-my-saas.js
+          "$RUNNER_TEMP/${{ matrix.backend }}-nextjs"
+          --backend "${{ matrix.backend }}" --frontend nextjs
+      - name: Verify generated metadata and proxy target
+        run: |
+          project="$RUNNER_TEMP/${{ matrix.backend }}-nextjs"
+          test -f "$project/.create-my-saas.json"
+          grep -Fx "API_PROXY_TARGET=http://localhost:${{ matrix.api_port }}" "$project/frontend/.env.example"
 
   nestjs:
     name: NestJS starter
