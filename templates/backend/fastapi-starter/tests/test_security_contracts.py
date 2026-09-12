@@ -1,8 +1,11 @@
 import unittest
+import asyncio
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from main import app
 from src.modules.auth.security.tokens import decode_access_token, encode_access_token, token_hash
-from src.modules.users.schemas import UserRegister
+from src.modules.auth.oauth import exchange_profile
+from src.modules.users.schemas import ChangePassword, ResetPasswordConfirm, UserRegister
 
 
 class SecurityContractTests(unittest.TestCase):
@@ -18,6 +21,20 @@ class SecurityContractTests(unittest.TestCase):
     def test_registration_rejects_password_without_number(self):
         with self.assertRaises(ValueError):
             UserRegister(email="person@example.com", name="Person", password="onlyletters")
+
+    def test_password_policy_is_identical_for_register_change_and_reset(self):
+        payloads = (
+            lambda password: UserRegister(email="person@example.com", name="Person", password=password),
+            lambda password: ChangePassword(currentPassword="old-password1", newPassword=password),
+            lambda password: ResetPasswordConfirm(token="x" * 20, newPassword=password),
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                payload("valid-password1")
+                with self.assertRaises(ValueError):
+                    payload("onlyletters")
+                with self.assertRaises(ValueError):
+                    payload("12345678")
 
     def test_public_api_has_no_subscription_mutation_endpoint(self):
         routes = {(method, route.path) for route in app.routes for method in getattr(route, "methods", set())}
@@ -41,3 +58,17 @@ class SecurityContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["error"]["code"], "HTTP_422")
         self.assertNotIn(password, response.text)
+
+    def test_google_oauth_requires_a_verified_email(self):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": True, "name": "Person"}]):
+            profile = asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
+        self.assertEqual((profile.email, profile.name), ("person@example.com", "Person"))
+
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": False}]):
+            with self.assertRaisesRegex(Exception, "verified email"):
+                asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
+
+    def test_github_oauth_uses_primary_verified_email_endpoint(self):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"login": "octocat"}, [{"email": "person@example.com", "primary": True, "verified": True}]]):
+            profile = asyncio.run(exchange_profile("github", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
+        self.assertEqual((profile.email, profile.name), ("person@example.com", "octocat"))

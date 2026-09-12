@@ -128,12 +128,25 @@ class AuthenticationApiTests(unittest.TestCase):
         refresh_cookie = next(cookie for cookie in cookies if cookie.startswith(f"{settings.refresh_cookie_name}="))
         csrf_cookie = next(cookie for cookie in cookies if cookie.startswith(f"{settings.csrf_cookie_name}="))
         self.assertIn("; Path=/auth;", refresh_cookie)
+        self.assertIn("HttpOnly", refresh_cookie)
+        self.assertIn("SameSite=lax", refresh_cookie)
         self.assertIn("; Path=/;", csrf_cookie)
+        self.assertNotIn("HttpOnly", csrf_cookie)
         self.assertEqual(response.json()["token_type"], "bearer")
 
         invalid = self.login(password="not-the-password")
         self.assertEqual(invalid.status_code, 401)
         self.assertEqual(invalid.json()["error"]["code"], "INVALID_CREDENTIALS")
+
+    def test_refresh_and_logout_require_the_double_submit_csrf_value(self):
+        self.register()
+        self.login()
+
+        refresh = self.client.post("/auth/refresh")
+        logout = self.client.post("/auth/logout")
+
+        self.assertEqual((refresh.status_code, refresh.json()["error"]["code"]), (403, "INVALID_CSRF_TOKEN"))
+        self.assertEqual((logout.status_code, logout.json()["error"]["code"]), (403, "INVALID_CSRF_TOKEN"))
 
     def test_users_me_returns_the_authenticated_user(self):
         self.register()
