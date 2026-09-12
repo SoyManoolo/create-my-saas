@@ -1,0 +1,44 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta name="twitter:card" content="summary" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="LaunchKit home">LaunchKit</a>
+      <nav aria-label="Main navigation">
+        <a href="/pricing">Pricing</a>
+        <a href="/docs">Docs</a>
+        <a href="/blog">Blog</a>
+      </nav>
+    </header>
+    <main><slot /></main>
+    <footer class="site-footer">
+      <span>© {new Date().getFullYear()} LaunchKit</span>
+      <a href="/docs">Documentation</a>
+      <a href="/blog">Blog</a>
+    </footer>
+  </body>
+</html>

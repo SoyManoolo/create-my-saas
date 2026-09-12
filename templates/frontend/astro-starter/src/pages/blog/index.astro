@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const posts = [
+  { title: 'Why static-first is a good SaaS default', date: '2026-09-12', excerpt: 'Start with pages that are easy to cache, index, and maintain.' },
+  { title: 'Keep interactivity deliberately small', date: '2026-09-05', excerpt: 'Hydrate only the parts of a public site that genuinely need JavaScript.' },
+];
+---
+
+<BaseLayout title="Blog — LaunchKit" description="Example content index for an Astro public site.">
+  <section class="content">
+    <p class="eyebrow">Blog</p>
+    <h1>Useful notes for building a public product site.</h1>
+    <div class="card-grid">
+      {posts.map((post) => (
+        <article class="card">
+          <time datetime={post.date}>{post.date}</time>
+          <h2>{post.title}</h2>
+          <p>{post.excerpt}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

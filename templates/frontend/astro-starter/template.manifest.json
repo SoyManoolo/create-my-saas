@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "frontend:astro",
+  "kind": "frontend",
+  "version": "0.1.0",
+  "displayName": "Astro public site starter",
+  "description": "A static-first, SEO-ready Astro starter for SaaS marketing sites, documentation, and blogs.",
+  "runtime": {
+    "language": "TypeScript",
+    "version": ">=20.9.0",
+    "packageManager": "pnpm@11.11.0"
+  },
+  "capabilities": [
+    "content.blog",
+    "content.documentation",
+    "marketing.landing-page",
+    "seo.metadata",
+    "seo.robots",
+    "seo.sitemap",
+    "ui.interactive-islands"
+  ],
+  "environment": {
+    "required": [
+      {
+        "name": "PUBLIC_SITE_URL",
+        "secret": false,
+        "description": "Canonical public URL used when building metadata and the sitemap."
+      }
+    ]
+  }
+}
