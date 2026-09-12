@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "frontend:react-router",
+  "kind": "frontend",
+  "version": "0.1.0",
+  "displayName": "React Router Framework starter",
+  "description": "A React Router Framework Mode frontend with browser sessions, protected routes, and a same-origin API proxy.",
+  "runtime": {
+    "language": "TypeScript",
+    "version": ">=20.19.0",
+    "packageManager": "pnpm@11.11.0"
+  },
+  "capabilities": [
+    "auth.browser-sessions",
+    "auth.csrf",
+    "auth.password-recovery",
+    "auth.email-verification",
+    "auth.protected-routes",
+    "rendering.ssr"
+  ],
+  "environment": {
+    "required": [
+      {
+        "name": "API_PROXY_TARGET",
+        "secret": false,
+        "description": "Server-only origin for the selected backend API."
+      }
+    ]
+  }
+}
