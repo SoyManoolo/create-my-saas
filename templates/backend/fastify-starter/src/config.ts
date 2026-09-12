@@ -10,7 +10,6 @@ const environment = z.object({
   ACCESS_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().positive().default(15),
   REFRESH_TOKEN_EXPIRE_DAYS: z.coerce.number().int().positive().default(30),
   REFRESH_COOKIE_NAME: z.string().min(1).default('refresh_token'),
-  ACCESS_COOKIE_NAME: z.string().min(1).default('access_token'),
   CSRF_COOKIE_NAME: z.string().min(1).default('csrf_token'),
   COOKIE_SECURE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).default('lax'),

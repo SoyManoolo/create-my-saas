@@ -51,7 +51,7 @@ const config: Config = {
   NODE_ENV: 'test', PORT: 3002, DATABASE_URL: 'postgresql://unused', FRONTEND_URL: 'http://localhost:3000',
   CORS_ORIGINS: 'http://localhost:3000', SECRET_KEY: 'test-secret-that-is-long-enough-for-validation',
   ACCESS_TOKEN_EXPIRE_MINUTES: 15, REFRESH_TOKEN_EXPIRE_DAYS: 30,
-  REFRESH_COOKIE_NAME: 'refresh_token', ACCESS_COOKIE_NAME: 'access_token', CSRF_COOKIE_NAME: 'csrf_token',
+  REFRESH_COOKIE_NAME: 'refresh_token', CSRF_COOKIE_NAME: 'csrf_token',
   COOKIE_SECURE: false, COOKIE_SAME_SITE: 'lax', origins: ['http://localhost:3000'],
 };
 
@@ -68,7 +68,7 @@ function setCookies(response: { headers: Record<string, unknown> }): string {
   return (Array.isArray(values) ? values : [values]).filter((value): value is string => typeof value === 'string').join('; ');
 }
 
-test('browser session contract stores credentials only in cookies', async () => {
+test('browser session contract returns an in-memory access token but never a refresh token', async () => {
   const app = await createApp({ config, repository: new InMemorySessions() });
   try {
     const registration = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'person@example.com', name: 'Person', password: 'password1' } });
@@ -77,16 +77,16 @@ test('browser session contract stores credentials only in cookies', async () => 
 
     const login = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'person@example.com', password: 'password1' } });
     assert.equal(login.statusCode, 200);
-    assert.deepEqual(Object.keys(login.json()), ['user']);
+    assert.deepEqual(Object.keys(login.json()).sort(), ['accessToken', 'user']);
+    assert.equal('refreshToken' in login.json(), false);
     const cookies = setCookies(login);
-    assert.match(cookies, /access_token=.*Path=\/; HttpOnly/);
+    assert.doesNotMatch(cookies, /access_token=/);
     assert.match(cookies, /refresh_token=.*Path=\/auth; HttpOnly/);
     assert.match(cookies, /csrf_token=(?!;).*Path=\//);
 
-    const access = cookie(login, 'access_token');
     const refresh = cookie(login, 'refresh_token');
     const csrf = cookie(login, 'csrf_token');
-    const me = await app.inject({ method: 'GET', url: '/users/me', headers: { cookie: access } });
+    const me = await app.inject({ method: 'GET', url: '/users/me', headers: { authorization: `Bearer ${login.json().accessToken}` } });
     assert.equal(me.statusCode, 200);
     assert.equal(me.json().user.email, 'person@example.com');
 
@@ -94,7 +94,8 @@ test('browser session contract stores credentials only in cookies', async () => 
     assert.equal(rejectedRefresh.statusCode, 403);
     const refreshed = await app.inject({ method: 'POST', url: '/auth/refresh', headers: { cookie: `${refresh}; ${csrf}`, 'x-csrf-token': csrf.split('=', 2)[1] } });
     assert.equal(refreshed.statusCode, 200);
-    assert.deepEqual(Object.keys(refreshed.json()), ['user']);
+    assert.deepEqual(Object.keys(refreshed.json()).sort(), ['accessToken', 'user']);
+    assert.equal('refreshToken' in refreshed.json(), false);
   } finally {
     await app.close();
   }

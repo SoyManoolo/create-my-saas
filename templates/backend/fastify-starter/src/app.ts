@@ -51,7 +51,7 @@ export async function createApp({ config, repository }: AppDependencies): Promis
   await app.register(cors, {
     credentials: true,
     origin: config.origins,
-    allowedHeaders: ['Content-Type', 'X-CSRF-Token'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-CSRF-Token'],
   });
 
   app.setErrorHandler((error, _request, reply) => {
@@ -75,8 +75,7 @@ export async function createApp({ config, repository }: AppDependencies): Promis
   const accessMaxAge = config.ACCESS_TOKEN_EXPIRE_MINUTES * 60;
   const refreshMaxAge = config.REFRESH_TOKEN_EXPIRE_DAYS * 86_400;
 
-  function setSessionCookies(reply: FastifyReply, accessToken: string, refreshToken: string) {
-    reply.setCookie(config.ACCESS_COOKIE_NAME, accessToken, cookieOptions(true, '/', accessMaxAge));
+  function setSessionCookies(reply: FastifyReply, refreshToken: string) {
     reply.setCookie(config.REFRESH_COOKIE_NAME, refreshToken, cookieOptions(true, '/auth', refreshMaxAge));
     reply.setCookie(config.CSRF_COOKIE_NAME, opaqueToken(), cookieOptions(false, '/', refreshMaxAge));
   }
@@ -116,8 +115,8 @@ export async function createApp({ config, repository }: AppDependencies): Promis
       return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'The email or password is incorrect.' });
     }
     const session = await issueSession(user);
-    setSessionCookies(reply, session.accessToken, session.refreshToken);
-    return reply.send({ user: toPublicUser(user) });
+    setSessionCookies(reply, session.refreshToken);
+    return reply.send({ accessToken: session.accessToken, user: toPublicUser(user) });
   });
 
   app.post('/auth/refresh', async (request, reply) => {
@@ -138,8 +137,8 @@ export async function createApp({ config, repository }: AppDependencies): Promis
       refreshExpiresAt: new Date(Date.now() + refreshMaxAge * 1_000),
     });
     if (!rotated) return unauthorized(reply, 'REFRESH_TOKEN_REUSED');
-    setSessionCookies(reply, accessToken, refreshToken);
-    return reply.send({ user: toPublicUser(user) });
+    setSessionCookies(reply, refreshToken);
+    return reply.send({ accessToken, user: toPublicUser(user) });
   });
 
   app.post('/auth/logout', async (request, reply) => {
@@ -149,14 +148,14 @@ export async function createApp({ config, repository }: AppDependencies): Promis
       const session = await repository.findActiveSessionByRefreshHash(hash(refreshToken));
       if (session) await repository.revokeSession(session.id);
     }
-    reply.clearCookie(config.ACCESS_COOKIE_NAME, { path: '/' });
     reply.clearCookie(config.REFRESH_COOKIE_NAME, { path: '/auth' });
     reply.clearCookie(config.CSRF_COOKIE_NAME, { path: '/' });
     return reply.code(204).send();
   });
 
   app.get('/users/me', async (request, reply) => {
-    const accessToken = request.cookies[config.ACCESS_COOKIE_NAME];
+    const authorization = request.headers.authorization ?? '';
+    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : '';
     if (!accessToken) return unauthorized(reply);
     const session = await repository.findActiveSessionByAccessHash(hash(accessToken));
     if (!session) return unauthorized(reply);
