@@ -8,16 +8,27 @@ import test from 'node:test';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(currentDirectory, '../../..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+function runNpm(argumentsList, options) {
+  if (process.platform === 'win32') {
+    return execFileSync(process.env.ComSpec ?? 'cmd.exe', [
+      '/d',
+      '/s',
+      '/c',
+      'npm.cmd',
+      ...argumentsList,
+    ], options);
+  }
+
+  return execFileSync('npm', argumentsList, options);
+}
 
 test('the published package contains the executable and template catalog', () => {
   const cacheDirectory = mkdtempSync(join(tmpdir(), 'create-my-saas-npm-cache-'));
   let output;
   try {
-    output = execFileSync(npmCommand, ['pack', '--json', '--dry-run', '--cache', cacheDirectory], {
+    output = runNpm(['pack', '--json', '--dry-run', '--cache', cacheDirectory], {
       cwd: repositoryRoot,
       encoding: 'utf8',
-      shell: process.platform === 'win32',
     });
   } finally {
     rmSync(cacheDirectory, { recursive: true, force: true });
