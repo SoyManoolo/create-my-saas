@@ -1,0 +1,50 @@
+{
+  "$schema": "../../../docs/template-manifest.schema.json",
+  "schemaVersion": 1,
+  "id": "backend:fastify",
+  "version": "0.1.0",
+  "kind": "backend",
+  "displayName": "Fastify starter",
+  "description": "Fastify TypeScript SaaS API with PostgreSQL-backed browser sessions and CSRF protection.",
+  "runtime": {
+    "language": "node",
+    "version": ">=20",
+    "packageManager": "pnpm"
+  },
+  "capabilities": [
+    "auth.password",
+    "auth.refresh-sessions",
+    "users.profile",
+    "database.postgresql",
+    "database.migrations",
+    "security.csrf"
+  ],
+  "development": {
+    "port": 3002,
+    "baseUrl": "http://localhost:3002"
+  },
+  "environment": {
+    "required": [
+      {
+        "name": "DATABASE_URL",
+        "secret": true,
+        "description": "PostgreSQL connection URL."
+      },
+      {
+        "name": "SECRET_KEY",
+        "secret": true,
+        "description": "Long random application secret."
+      },
+      {
+        "name": "FRONTEND_URL",
+        "secret": false,
+        "description": "Public URL of the selected frontend."
+      },
+      {
+        "name": "CORS_ORIGINS",
+        "secret": false,
+        "description": "Comma-separated browser origins allowed to call the API."
+      }
+    ]
+  }
+}
