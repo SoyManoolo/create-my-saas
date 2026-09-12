@@ -4,5 +4,6 @@
 
 [data-theme="dark"] { --canvas:#10121a; --surface:#181b26; --surface-soft:#222633; --ink:#f0f2f8; --muted:#a7afc0; --line:#2c3140; --accent:#9a94ff; --accent-dark:#b6b2ff; --accent-soft:#29284a; --teal:#4bd1be; --amber:#f7c768; --rose:#ff91a3; --shadow:0 12px 35px rgba(0,0,0,.22); color-scheme:dark; }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--canvas); color:var(--ink); font-family:var(--font-geist),Arial,sans-serif; }
+body { margin:0; background:var(--canvas); color:var(--ink); font-family:Arial,sans-serif; }
 button,input { font:inherit; } button { cursor:pointer; }
+.page-status{min-height:100vh;display:grid;place-items:center;color:var(--muted);font-size:14px}

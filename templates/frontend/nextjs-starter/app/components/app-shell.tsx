@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import styles from "./app-shell.module.css";
+import { useAuth } from "./auth-provider";
 
 const items = [
   { href: "/", label: "Inicio", icon: "⌂" },
@@ -13,26 +14,16 @@ const items = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem("nexa-theme");
-    const useDark = savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    setDark(useDark);
-    document.documentElement.dataset.theme = useDark ? "dark" : "light";
-  }, []);
-  function toggleTheme() {
-    const nextTheme = !dark;
-    setDark(nextTheme);
-    document.documentElement.dataset.theme = nextTheme ? "dark" : "light";
-    window.localStorage.setItem("nexa-theme", nextTheme ? "dark" : "light");
-  }
+  const { user, signOut } = useAuth();
+  async function logout() { await signOut(); }
+  const initials = user?.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() ?? "";
   return <div className={styles.app}>
     <aside className={styles.sidebar}>
-      <Link className={styles.brand} href="/"><span>n</span>Nexa</Link>
-      <div className={styles.workspace}><i>W</i><div><strong>Mi espacio</strong><small>Plan Free</small></div><b>⌄</b></div>
+      <Link className={styles.brand} href="/"><span>s</span>Starter</Link>
+      <div className={styles.workspace}><i>{initials}</i><div><strong>Tu espacio</strong><small>Personaliza tu producto</small></div></div>
       <nav aria-label="Navegación principal">{items.map((item) => <Link key={item.href} className={pathname === item.href ? styles.active : ""} href={item.href}><i>{item.icon}</i>{item.label}</Link>)}</nav>
-      <div className={styles.sidebarBottom}><div className={styles.starter}><span>✦</span><strong>Tu producto empieza aquí</strong><p>Añade los recursos y herramientas propias de tu SaaS en la navegación.</p></div><Link className={styles.user} href="/account"><i>ER</i><div><strong>Erik Ramos</strong><small>Administrador</small></div><b>···</b></Link></div>
+      <div className={styles.sidebarBottom}><div className={styles.starter}><span>✦</span><strong>Tu producto empieza aquí</strong><p>Añade los recursos y herramientas propias de tu SaaS en la navegación.</p></div><div className={styles.user}><i>{initials}</i><div><strong>{user?.name}</strong><small>{user?.email}</small></div><button type="button" onClick={() => void logout()} aria-label="Cerrar sesión">Salir</button></div></div>
     </aside>
-    <main className={styles.main}><header className={styles.header}><div><span className={styles.statusDot}/>Todos los sistemas operativos</div><div className={styles.headerActions}><button onClick={toggleTheme} aria-label={dark ? "Activar modo claro" : "Activar modo oscuro"} title={dark ? "Modo claro" : "Modo oscuro"}>{dark ? "☀" : "☾"}</button><button aria-label="Notificaciones">♧</button><Link href="/account">ER</Link></div></header>{children}</main>
+    <main className={styles.main}><header className={styles.header}><div><span className={styles.statusDot}/>Sesión activa</div><div className={styles.headerActions}><Link href="/account" aria-label="Abrir cuenta">{initials}</Link></div></header>{children}</main>
   </div>;
 }
