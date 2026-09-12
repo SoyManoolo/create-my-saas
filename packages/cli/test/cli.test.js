@@ -32,6 +32,7 @@ test('lists templates from manifests', () => {
   assert.equal(status, 0);
   assert.match(output.join('\n'), /fastapi/);
   assert.match(output.join('\n'), /nestjs/);
+  assert.match(output.join('\n'), /fastify/);
   assert.match(output.join('\n'), /nextjs/);
   assert.match(output.join('\n'), /astro/);
   assert.match(output.join('\n'), /react-router/);

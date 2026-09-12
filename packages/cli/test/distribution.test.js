@@ -41,7 +41,10 @@ test('the published package contains the executable and template catalog', () =>
   assert.equal(packedPaths.has('packages/cli/src/catalog.js'), true);
   assert.equal(packedPaths.has('templates/backend/fastapi-starter/template.manifest.json'), true);
   assert.equal(packedPaths.has('templates/backend/nestjs-starter/template.manifest.json'), true);
+  assert.equal(packedPaths.has('templates/backend/fastify-starter/template.manifest.json'), true);
   assert.equal(packedPaths.has('templates/frontend/nextjs-starter/template.manifest.json'), true);
+  assert.equal(packedPaths.has('templates/frontend/react-router-starter/template.manifest.json'), true);
+  assert.equal(packedPaths.has('templates/frontend/astro-starter/template.manifest.json'), true);
   assert.equal(packedPaths.has('docs/template-manifests.md'), true);
   assert.equal(
     [...packedPaths].some((path) => /(^|\/)(node_modules|\.next|\.venv|__pycache__|dist)(\/|$)|\.(pyc|tsbuildinfo)$/.test(path)),
