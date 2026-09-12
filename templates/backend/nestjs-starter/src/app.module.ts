@@ -74,6 +74,7 @@ const environmentBoolean = (value: string | undefined): boolean => ['1', 'true',
           COOKIE_SECURE: cookieSecure,
           COOKIE_SAME_SITE: cookieSameSite,
           DATABASE_SSL: environmentBoolean(environment.DATABASE_SSL),
+          OAUTH_ENABLED: environmentBoolean(environment.OAUTH_ENABLED),
         };
       },
     }),

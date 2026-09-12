@@ -47,7 +47,12 @@ export class AuthController {
   async resend(@CurrentUser() user: User): Promise<void> { await this.authService.resendEmailVerification(user); }
   @Get('oauth/providers') providers(): Array<{ provider: string; configured: boolean }> { return this.authService.oauthProviders(); }
   @Get('oauth/:provider') startOAuth(@Param('provider') provider: string): Promise<{ authorizationUrl: string }> { return this.authService.oauthStart(provider); }
-  @Get('oauth/:provider/callback') callbackOAuth(@Param('provider') provider: string, @Query('state') state: string, @Query('code') code: string): Promise<never> { return this.authService.oauthCallback(provider, state, code); }
+  @Get('oauth/:provider/callback')
+  async callbackOAuth(@Param('provider') provider: string, @Query('state') state: string, @Query('code') code: string, @Res({ passthrough: true }) response: Response): Promise<void> {
+    const session = await this.authService.oauthCallback(provider, state, code);
+    this.setBrowserSession(response, session);
+    response.redirect(HttpStatus.SEE_OTHER, `${this.config.get<string>('FRONTEND_URL', 'http://localhost:3000').replace(/\/$/, '')}/auth/oauth/callback`);
+  }
   private metadata(req: Request): { ip?: string; userAgent?: string } { return { ip: req.ip, userAgent: req.header('user-agent') }; }
   private refreshCookieName(): string { return this.config.get<string>('REFRESH_COOKIE_NAME', 'refresh_token'); }
   private csrfCookieName(): string { return this.config.get<string>('CSRF_COOKIE_NAME', 'csrf_token'); }

@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
+from src.core.exceptions import AppError
 from src.core.email import send_secure_email
 from src.modules.users.repository import UserRepository
 from src.modules.users.schemas import UserLogin, UserPublic, UserRegister
@@ -21,6 +22,18 @@ class AuthService:
         user = await self.users.get_user_by_email(str(payload.email))
         if not user or not user.is_active or not user.password_hash or not verify_password(payload.password, user.password_hash): return None
         return user, await self.issue_session(user)
+
+    async def login_oauth(self, email: str, name: str) -> tuple[dict, str]:
+        """Create or sign in a user whose email has been verified by OAuth."""
+        user = await self.users.get_user_by_email(email)
+        if not user:
+            user = await self.users.create_user(User(email=email, name=name, password_hash=None, email_verified=True))
+        if not user.is_active:
+            raise AppError("The user account is inactive.", code="USER_INACTIVE", status_code=403)
+        if not user.email_verified:
+            user.email_verified = True
+            await self.users.save(user)
+        return await self.issue_session(user)
 
     def _new_session(self, user: User) -> tuple[str, RefreshToken]:
         raw = opaque_token()

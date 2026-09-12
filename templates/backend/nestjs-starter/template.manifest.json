@@ -21,6 +21,8 @@
     "organizations.invitations",
     "billing.subscription-domain",
     "oauth.pkce",
+    "oauth.google",
+    "oauth.github",
     "database.postgresql",
     "database.migrations",
     "security.csrf",

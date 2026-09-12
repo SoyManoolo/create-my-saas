@@ -128,33 +128,73 @@ export class AuthService {
     if (user) { user.emailVerified = true; await this.usersService.save(user); }
   }
   async resendEmailVerification(user: User): Promise<void> { if (!user.emailVerified) await this.sendOneTimeToken(user, 'email_verification'); }
-  oauthProviders(): Array<{ provider: string; configured: boolean }> { return ['google', 'github'].map((provider) => ({ provider, configured: Boolean(this.config.get<string>(`OAUTH_${provider.toUpperCase()}_CLIENT_ID`) && this.config.get<string>(`OAUTH_${provider.toUpperCase()}_AUTHORIZATION_URL`)) })); }
+  oauthProviders(): Array<{ provider: string; configured: boolean }> { return ['google', 'github'].map((provider) => ({ provider, configured: Boolean(this.oauthConfig(provider)) })); }
   async oauthStart(provider: string): Promise<{ authorizationUrl: string }> {
-    const key = provider.toUpperCase();
-    const clientId = this.config.get<string>(`OAUTH_${key}_CLIENT_ID`);
-    const authorizationUrl = this.config.get<string>(`OAUTH_${key}_AUTHORIZATION_URL`);
-    const redirectUri = this.config.get<string>(`OAUTH_${key}_REDIRECT_URI`);
-    if (!clientId || !authorizationUrl || !redirectUri || !this.oauthProviders().some((item) => item.provider === provider)) throw new AppError('OAUTH_PROVIDER_UNAVAILABLE', 'This OAuth provider is not configured.', 404);
+    const config = this.oauthConfig(provider);
+    if (!config) throw new AppError('OAUTH_PROVIDER_UNAVAILABLE', 'This OAuth provider is not configured.', 404);
     const state = this.newOpaqueToken(); const verifier = this.newOpaqueToken();
     await this.oauthStates.save(this.oauthStates.create({ provider, stateHash: this.hashToken(state), codeVerifier: verifier, usedAt: null, expiresAt: new Date(Date.now() + 10 * 60_000) }));
     const challenge = createHash('sha256').update(verifier).digest('base64url');
-    const url = new URL(authorizationUrl); url.searchParams.set('response_type', 'code'); url.searchParams.set('client_id', clientId); url.searchParams.set('redirect_uri', redirectUri); url.searchParams.set('scope', this.config.get<string>(`OAUTH_${key}_SCOPES`, 'openid email profile')); url.searchParams.set('state', state); url.searchParams.set('code_challenge', challenge); url.searchParams.set('code_challenge_method', 'S256');
+    const url = new URL(config.authorizationUrl); url.searchParams.set('response_type', 'code'); url.searchParams.set('client_id', config.clientId); url.searchParams.set('redirect_uri', config.redirectUri); url.searchParams.set('scope', config.scopes); url.searchParams.set('state', state); url.searchParams.set('code_challenge', challenge); url.searchParams.set('code_challenge_method', 'S256');
     return { authorizationUrl: url.toString() };
   }
-  async oauthCallback(provider: string, state: string, code: string): Promise<never> {
+  async oauthCallback(provider: string, state: string, code: string): Promise<BrowserAuthenticationResult> {
+    const config = this.oauthConfig(provider);
+    if (!config) throw new AppError('OAUTH_PROVIDER_UNAVAILABLE', 'This OAuth provider is not configured.', 404);
     if (!code) throw new AppError('OAUTH_CALLBACK_INVALID', 'OAuth authorization code is required.', 400);
     const record = await this.oauthStates.findOneBy({ provider, stateHash: this.hashToken(state), usedAt: IsNull() });
     if (!record || record.expiresAt <= new Date()) throw new AppError('OAUTH_STATE_INVALID', 'OAuth state is invalid or expired.', 400);
     const used = await this.oauthStates.update({ id: record.id, usedAt: IsNull() }, { usedAt: new Date() });
     if (!used.affected) throw new AppError('OAUTH_STATE_INVALID', 'OAuth state was already used.', 400);
-    // The provider exchange must be implemented by an adapter using record.codeVerifier and the provider token endpoint.
-    throw new AppError('OAUTH_NOT_IMPLEMENTED', 'OAuth state and PKCE validation succeeded; configure a provider adapter for token exchange.', 501);
+    const profile = await this.exchangeOAuthProfile(provider, code, record.codeVerifier, config);
+    let user = await this.usersService.findByEmail(profile.email);
+    if (!user) user = await this.usersService.create({ email: profile.email, name: profile.name, passwordHash: null });
+    if (!user.isActive) throw new AppError('USER_INACTIVE', 'The user account is inactive.', 403);
+    if (!user.emailVerified) { user.emailVerified = true; await this.usersService.save(user); }
+    return this.createAuthentication(user, {});
   }
 
   private async createAuthentication(user: User, metadata: RequestMetadata): Promise<BrowserAuthenticationResult> {
     const refreshToken = this.newOpaqueToken();
     await this.sessions.save(this.sessions.create({ id: this.sessionIdFromToken(refreshToken), userId: user.id, tokenHash: this.hashToken(refreshToken), expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000), revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null }));
     return { authentication: { accessToken: await this.jwtService.signAsync({ sub: user.id, type: 'access', jti: randomBytes(16).toString('hex') }), user: UserPublicDto.fromEntity(user) }, refreshToken };
+  }
+  private oauthConfig(provider: string): { clientId: string; clientSecret: string; authorizationUrl: string; tokenUrl: string; userInfoUrl: string; redirectUri: string; scopes: string } | null {
+    if (!this.config.get<boolean>('OAUTH_ENABLED', false) || !['google', 'github'].includes(provider)) return null;
+    const key = provider.toUpperCase();
+    const clientId = this.config.get<string>(`OAUTH_${key}_CLIENT_ID`);
+    const clientSecret = this.config.get<string>(`OAUTH_${key}_CLIENT_SECRET`);
+    const redirectUri = this.config.get<string>(`OAUTH_${key}_REDIRECT_URI`);
+    if (!clientId || !clientSecret || !redirectUri) return null;
+    const google = provider === 'google';
+    return {
+      clientId, clientSecret, redirectUri,
+      authorizationUrl: this.config.get<string>(`OAUTH_${key}_AUTHORIZATION_URL`, google ? 'https://accounts.google.com/o/oauth2/v2/auth' : 'https://github.com/login/oauth/authorize'),
+      tokenUrl: this.config.get<string>(`OAUTH_${key}_TOKEN_URL`, google ? 'https://oauth2.googleapis.com/token' : 'https://github.com/login/oauth/access_token'),
+      userInfoUrl: this.config.get<string>(`OAUTH_${key}_USERINFO_URL`, google ? 'https://openidconnect.googleapis.com/v1/userinfo' : 'https://api.github.com/user'),
+      scopes: this.config.get<string>(`OAUTH_${key}_SCOPES`, google ? 'openid email profile' : 'read:user user:email'),
+    };
+  }
+  private async exchangeOAuthProfile(provider: string, code: string, verifier: string, config: { clientId: string; clientSecret: string; tokenUrl: string; userInfoUrl: string; redirectUri: string }): Promise<{ email: string; name: string }> {
+    const token = await this.oauthJson(config.tokenUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: config.redirectUri, code_verifier: verifier }) });
+    if (typeof token.access_token !== 'string' || !token.access_token) throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider did not return an access token.', 502);
+    const headers = { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json', 'User-Agent': 'create-my-saas' };
+    const profile = await this.oauthJson(config.userInfoUrl, { headers });
+    if (provider === 'github' && !profile.email) {
+      const emails = await this.oauthJson('https://api.github.com/user/emails', { headers }) as Array<Record<string, unknown>>;
+      profile.email = emails.find((item) => item.primary === true && item.verified === true)?.email;
+    }
+    const verified = provider === 'google' ? profile.email_verified === true : Boolean(profile.email);
+    if (typeof profile.email !== 'string' || !profile.email || !verified) throw new AppError('OAUTH_EMAIL_UNVERIFIED', 'The OAuth provider did not provide a verified email address.', 400);
+    return { email: profile.email.toLowerCase(), name: String(profile.name ?? profile.login ?? profile.email.split('@')[0]).slice(0, 120) };
+  }
+  private async oauthJson(url: string, options: RequestInit): Promise<any> {
+    let response: Response;
+    try { response = await fetch(url, { ...options, signal: AbortSignal.timeout(10_000) }); }
+    catch { throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider could not complete sign-in.', 502); }
+    if (!response.ok) throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider could not complete sign-in.', 502);
+    try { return await response.json(); }
+    catch { throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider returned an invalid response.', 502); }
   }
   private async createOneTimeToken(userId: string, kind: TokenKind): Promise<string> {
     await this.tokens.update({ userId, kind, usedAt: IsNull() }, { usedAt: new Date() });
