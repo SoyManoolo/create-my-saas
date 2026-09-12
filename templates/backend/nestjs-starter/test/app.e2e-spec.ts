@@ -54,6 +54,10 @@ describe('AppController (e2e)', () => {
       .expect(200);
 
     expect(loginResponse.body.accessToken).toEqual(expect.any(String));
+    const cookieHeader = loginResponse.headers['set-cookie'];
+    const cookies = Array.isArray(cookieHeader) ? cookieHeader : cookieHeader ? [cookieHeader] : [];
+    expect(cookies.find((cookie) => cookie.startsWith('refresh_token='))).toMatch(/(?:^|;\s*)Path=\/auth(?:;|$)/);
+    expect(cookies.find((cookie) => cookie.startsWith('csrf_token='))).toMatch(/(?:^|;\s*)Path=\/(?:;|$)/);
 
     return request(app.getHttpServer())
       .get('/users/me')

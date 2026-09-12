@@ -17,9 +17,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def service(db: AsyncSession, users: UserRepository) -> AuthService: return AuthService(db, users)
 
 def set_session_cookies(response: Response, refresh_token: str) -> None:
-    common = {"path": "/auth", "secure": settings.cookie_secure, "samesite": settings.cookie_same_site, "max_age": settings.refresh_token_expire_days * 86_400}
-    response.set_cookie(settings.refresh_cookie_name, refresh_token, httponly=True, **common)
-    response.set_cookie(settings.csrf_cookie_name, token_urlsafe(32), httponly=False, **common)
+    common = {"secure": settings.cookie_secure, "samesite": settings.cookie_same_site, "max_age": settings.refresh_token_expire_days * 86_400}
+    response.set_cookie(settings.refresh_cookie_name, refresh_token, httponly=True, path="/auth", **common)
+    # The CSRF value is not a credential. It must be readable by frontend
+    # routes such as / and /account so they can send X-CSRF-Token to /auth.
+    response.set_cookie(settings.csrf_cookie_name, token_urlsafe(32), httponly=False, path="/", **common)
 
 def require_csrf(request: Request) -> None:
     cookie = request.cookies.get(settings.csrf_cookie_name, "")
@@ -28,9 +30,9 @@ def require_csrf(request: Request) -> None:
         raise AppError("CSRF token is missing or invalid.", code="INVALID_CSRF_TOKEN", status_code=403)
 
 def clear_session_cookies(response: Response) -> None:
-    common = {"path": "/auth", "secure": settings.cookie_secure, "samesite": settings.cookie_same_site}
-    response.delete_cookie(settings.refresh_cookie_name, **common)
-    response.delete_cookie(settings.csrf_cookie_name, **common)
+    common = {"secure": settings.cookie_secure, "samesite": settings.cookie_same_site}
+    response.delete_cookie(settings.refresh_cookie_name, path="/auth", **common)
+    response.delete_cookie(settings.csrf_cookie_name, path="/", **common)
 
 @router.post("/register", response_model=UserPublic, status_code=201)
 async def register(payload: UserRegister, db: AsyncSession = Depends(get_db), users: UserRepository = Depends(get_user_repository)):

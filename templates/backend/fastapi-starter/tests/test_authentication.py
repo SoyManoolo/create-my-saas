@@ -124,6 +124,11 @@ class AuthenticationApiTests(unittest.TestCase):
         self.assertNotIn("refresh_token", response.json())
         self.assertIn(f"{settings.refresh_cookie_name}=", response.headers["set-cookie"])
         self.assertIn("HttpOnly", response.headers["set-cookie"])
+        cookies = response.headers.get_list("set-cookie")
+        refresh_cookie = next(cookie for cookie in cookies if cookie.startswith(f"{settings.refresh_cookie_name}="))
+        csrf_cookie = next(cookie for cookie in cookies if cookie.startswith(f"{settings.csrf_cookie_name}="))
+        self.assertIn("; Path=/auth;", refresh_cookie)
+        self.assertIn("; Path=/;", csrf_cookie)
         self.assertEqual(response.json()["token_type"], "bearer")
 
         invalid = self.login(password="not-the-password")

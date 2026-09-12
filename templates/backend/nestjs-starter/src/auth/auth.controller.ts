@@ -53,7 +53,10 @@ export class AuthController {
   private csrfCookieName(): string { return this.config.get<string>('CSRF_COOKIE_NAME', 'csrf_token'); }
   private cookieOptions(httpOnly: boolean): { httpOnly: boolean; secure: boolean; sameSite: 'lax' | 'strict' | 'none'; path: string; maxAge?: number } {
     const sameSite = this.config.get<string>('COOKIE_SAME_SITE', 'lax') as 'lax' | 'strict' | 'none';
-    return { httpOnly, secure: this.config.get<boolean>('COOKIE_SECURE', false), sameSite, path: '/auth', maxAge: this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000 };
+    // The refresh credential is intentionally scoped to auth endpoints. The
+    // non-HttpOnly CSRF value must be readable by frontend routes that issue
+    // refresh/logout requests from outside /auth.
+    return { httpOnly, secure: this.config.get<boolean>('COOKIE_SECURE', false), sameSite, path: httpOnly ? '/auth' : '/', maxAge: this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000 };
   }
   private setBrowserSession(response: Response, session: BrowserAuthenticationResult): AuthenticationResult {
     response.cookie(this.refreshCookieName(), session.refreshToken, this.cookieOptions(true));
