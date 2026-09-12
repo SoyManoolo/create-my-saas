@@ -1,0 +1,15 @@
+{
+  "name": "create-my-saas",
+  "version": "0.1.0",
+  "description": "Generate a SaaS project from the create-my-saas template catalog.",
+  "type": "module",
+  "bin": {
+    "create-my-saas": "./bin/create-my-saas.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
