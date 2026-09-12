@@ -1,0 +1,6 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout title="Cuenta" description="Perfil y verificación de la sesión actual." protected>
+  <section class="dashboard" data-protected-content hidden><p class="eyebrow">CUENTA</p><h1>Tu perfil</h1><div class="account-card"><dl><div><dt>Nombre</dt><dd data-user-name></dd></div><div><dt>Correo</dt><dd data-user-email></dd></div><div><dt>Estado</dt><dd data-verification></dd></div></dl><button type="button" data-resend-verification>Reenviar verificación</button><p data-account-status class="form-status" role="status"></p></div></section>
+</BaseLayout>

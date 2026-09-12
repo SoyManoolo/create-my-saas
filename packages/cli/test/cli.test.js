@@ -78,7 +78,7 @@ test('refuses to overwrite a destination directory', (t) => {
   );
 });
 
-test('generates the static Astro frontend without a backend proxy', (t) => {
+test('generates the Astro frontend without a selected backend', (t) => {
   const workspace = temporaryDirectory();
   const destination = join(workspace, 'marketing-site');
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
@@ -91,7 +91,7 @@ test('generates the static Astro frontend without a backend proxy', (t) => {
 
   const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
   assert.match(frontendEnvironment, /^PUBLIC_SITE_URL=/m);
-  assert.doesNotMatch(frontendEnvironment, /^API_PROXY_TARGET=/m);
+  assert.match(frontendEnvironment, /^API_PROXY_TARGET=$/m);
   assert.equal(existsSync(join(destination, 'frontend', 'src', 'pages', 'index.astro')), true);
 });
 
@@ -129,21 +129,21 @@ test('rejects an incomplete backend for browser-session frontends', (t) => {
   assert.equal(existsSync(destination), false);
 });
 
-test('allows a static Astro site with the Fastify API starter', (t) => {
+test('generates the authenticated Astro site with an OAuth-capable backend', (t) => {
   const workspace = temporaryDirectory();
-  const destination = join(workspace, 'fastify-marketing-site');
+  const destination = join(workspace, 'astro-saas');
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
   generateProject({
     destination,
-    backendId: 'fastify',
+    backendId: 'nestjs',
     frontendId: 'astro',
     templatesDirectory: defaultTemplatesDirectory,
   });
 
   const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
-  assert.doesNotMatch(frontendEnvironment, /^API_PROXY_TARGET=/m);
-  assert.equal(existsSync(join(destination, 'backend', 'src', 'app.ts')), true);
+  assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:3001$/m);
+  assert.equal(existsSync(join(destination, 'backend', 'src', 'main.ts')), true);
 });
 
 test('rejects an unknown template without creating output', (t) => {

@@ -4,9 +4,10 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description: string;
+  protected?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, protected: protectedPage = false } = Astro.props;
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
 ---
 
@@ -25,13 +26,15 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
     <meta name="twitter:card" content="summary" />
     <title>{title}</title>
   </head>
-  <body>
+  <body data-protected={protectedPage ? '' : undefined}>
     <header class="site-header">
       <a class="brand" href="/" aria-label="LaunchKit home">LaunchKit</a>
-      <nav aria-label="Main navigation">
+      <button class="menu-button" type="button" data-mobile-menu-button aria-controls="main-navigation">Menú</button>
+      <nav id="main-navigation" data-mobile-menu aria-label="Main navigation">
         <a href="/pricing">Pricing</a>
         <a href="/docs">Docs</a>
         <a href="/blog">Blog</a>
+        {protectedPage ? <><a href="/app/">Espacio</a><a href="/account/">Cuenta</a><button type="button" class="text-button" data-logout>Cerrar sesión</button></> : <><a href="/login/">Entrar</a><a class="nav-button" href="/register/">Crear cuenta</a></>}
       </nav>
     </header>
     <main><slot /></main>
@@ -40,5 +43,8 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
       <a href="/docs">Documentation</a>
       <a href="/blog">Blog</a>
     </footer>
+    <script>
+      import '../scripts/auth';
+    </script>
   </body>
 </html>

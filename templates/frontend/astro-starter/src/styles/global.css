@@ -30,8 +30,14 @@ h2 { letter-spacing: -0.035em; margin-top: 2.5rem; }
 input, textarea { width: 100%; border: 1px solid #aab5c9; border-radius: 0.45rem; padding: 0.7rem; font: inherit; }
 .form-status { margin: 0; color: #137333; font-weight: 600; min-height: 1.5rem; }
 .prose { max-width: 46rem; }
+.menu-button { display: none; }.nav-button { background:#5d3ef0; color:#fff; border-radius:.55rem; padding:.5rem .75rem; text-decoration:none; }.text-button { border:0; padding:0; color:inherit; background:transparent; font:inherit; font-weight:inherit; }
+.text-link { margin-left:1rem; color:#5d3ef0; font-weight:700; }
+.auth-page { min-height:calc(100vh - 10rem); display:grid; place-items:center; padding-block:3rem; }.auth-card { width:min(100%,26rem); padding:2rem; border:1px solid #dce2f0; border-radius:.9rem; background:#fff; box-shadow:0 12px 35px rgba(29,38,59,.07); }.auth-card h1 { font-size:2rem; }.auth-card form { display:grid; gap:1rem; margin-top:1.5rem; }.auth-card label { display:grid; gap:.4rem; font-size:.9rem; font-weight:700; }.auth-card button { width:100%; }.form-footer { text-align:center; color:#526078; font-size:.9rem; }.oauth { display:grid; gap:.75rem; margin-top:1.25rem; }.divider { display:flex; align-items:center; gap:.75rem; color:#526078; font-size:.85rem; text-align:center; }.divider:before,.divider:after { content:""; height:1px; flex:1; background:#dce2f0; }.oauth-actions { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }.secondary-button { border:1px solid #aab5c9; background:#fff; color:#182033; }.form-status.error { color:#b4233d; }.form-status.success { color:#137333; }.dashboard { max-width:50rem; padding-block:5rem; }.dashboard h1 { font-size:clamp(2.6rem,7vw,4.5rem); }.account-card { margin-top:2rem; display:grid; gap:1rem; max-width:38rem; border:1px solid #dce2f0; border-radius:.75rem; padding:1.25rem; background:#fff; }.account-card dl { display:grid; gap:.8rem; margin:0; }.account-card dl div { display:flex; justify-content:space-between; gap:2rem; border-bottom:1px solid #dce2f0; padding-bottom:.75rem; }.account-card dt { color:#526078; }.account-card dd { margin:0; font-weight:700; }
 
 @media (max-width: 35rem) {
-  .site-header { align-items: flex-start; padding-block: 1rem; gap: 1rem; }
-  .site-header nav { gap: 0.75rem; font-size: 0.9rem; }
+  .site-header { min-height:4.25rem; position:relative; padding-block:1rem; gap:1rem; }
+  .menu-button { display:block; background:transparent; color:#5d3ef0; padding:.25rem; }
+  .site-header nav { display:none; position:absolute; z-index:10; top:4rem; right:1.5rem; width:min(15rem,calc(100vw - 3rem)); padding:1rem; border:1px solid #dce2f0; border-radius:.65rem; background:#fff; box-shadow:0 12px 35px rgba(29,38,59,.12); }
+  .site-header nav.open { display:grid; gap:.85rem; font-size:.95rem; }
+  .site-header nav .text-button { text-align:left; }.auth-card { padding:1.5rem; }.oauth-actions { grid-template-columns:1fr; }
 }

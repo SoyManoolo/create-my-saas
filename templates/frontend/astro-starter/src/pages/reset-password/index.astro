@@ -1,0 +1,8 @@
+---
+import AuthPage from '../../components/AuthPage.astro';
+---
+<AuthPage title="Nueva contraseña" description="Elige una nueva contraseña para tu cuenta.">
+  <h1>Nueva contraseña</h1><p>Elige una contraseña segura.</p>
+  <form data-auth-form="reset"><label>Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label><p data-form-status class="form-status" role="status"></p><button type="submit">Actualizar contraseña</button></form>
+  <p class="form-footer"><a href="/login/">Volver a iniciar sesión</a></p>
+</AuthPage>

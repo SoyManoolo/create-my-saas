@@ -1,0 +1,9 @@
+---
+import AuthPage from '../../components/AuthPage.astro';
+---
+<AuthPage title="Iniciar sesión" description="Accede a tu espacio de trabajo.">
+  <h1>Inicia sesión</h1><p>Accede a tu espacio de trabajo.</p>
+  <form data-auth-form="login"><label>Correo electrónico<input name="email" type="email" autocomplete="email" required /></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required /></label><p data-form-status class="form-status" role="status"></p><button type="submit">Iniciar sesión</button></form>
+  <div class="oauth"><p class="divider">o continúa con</p><p data-oauth-status class="form-status" role="status"></p><div class="oauth-actions"><button type="button" class="secondary-button" data-oauth-provider="google">Google</button><button type="button" class="secondary-button" data-oauth-provider="github">GitHub</button></div></div>
+  <p class="form-footer"><a href="/forgot-password/">¿Has olvidado tu contraseña?</a><br />¿Aún no tienes cuenta? <a href="/register/">Crear cuenta</a></p>
+</AuthPage>

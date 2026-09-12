@@ -1,6 +1,5 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import ContactForm from '../components/ContactForm.astro';
 ---
 
 <BaseLayout title="LaunchKit — ship your product site" description="A fast, static-first public website for your next SaaS.">
@@ -8,12 +7,11 @@ import ContactForm from '../components/ContactForm.astro';
     <p class="eyebrow">Static-first SaaS marketing</p>
     <h1>Make the public side of your product feel instant.</h1>
     <p class="lead">LaunchKit is the small, focused site template for a landing page, content, and SEO — without pulling in a dashboard or a complex auth flow.</p>
-    <a class="button" href="/pricing">See pricing</a>
+    <a class="button" href="/register/">Crear cuenta</a><a class="text-link" href="/login/">Ya tengo una cuenta</a>
     <div class="card-grid">
       <article class="card"><h2>Fast by default</h2><p>Pages are pre-rendered to HTML and ship no framework runtime for static content.</p></article>
       <article class="card"><h2>Content-ready</h2><p>Use the included blog and docs routes as a starting point for your own content model.</p></article>
       <article class="card"><h2>Focused interactivity</h2><p>The contact form adds only a tiny script where the page needs it.</p></article>
     </div>
-    <ContactForm />
   </section>
 </BaseLayout>

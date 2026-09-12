@@ -1,0 +1,8 @@
+---
+import AuthPage from '../../components/AuthPage.astro';
+---
+<AuthPage title="Restablecer contraseña" description="Solicita un enlace de restablecimiento de contraseña.">
+  <h1>Restablece tu contraseña</h1><p>Te enviaremos un enlace de un solo uso.</p>
+  <form data-auth-form="forgot"><label>Correo electrónico<input name="email" type="email" autocomplete="email" required /></label><p data-form-status class="form-status" role="status"></p><button type="submit">Enviar enlace</button></form>
+  <p class="form-footer"><a href="/login/">Volver a iniciar sesión</a></p>
+</AuthPage>

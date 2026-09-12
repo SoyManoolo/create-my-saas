@@ -1,0 +1,9 @@
+---
+import AuthPage from '../../components/AuthPage.astro';
+---
+<AuthPage title="Crear cuenta" description="Crea la cuenta de tu producto.">
+  <h1>Crea tu cuenta</h1><p>Usa al menos ocho caracteres, una letra y un número.</p>
+  <form data-auth-form="register"><label>Nombre<input name="name" autocomplete="name" required /></label><label>Correo electrónico<input name="email" type="email" autocomplete="email" required /></label><label>Contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label><p data-form-status class="form-status" role="status"></p><button type="submit">Crear cuenta</button></form>
+  <div class="oauth"><p class="divider">o continúa con</p><p data-oauth-status class="form-status" role="status"></p><div class="oauth-actions"><button type="button" class="secondary-button" data-oauth-provider="google">Google</button><button type="button" class="secondary-button" data-oauth-provider="github">GitHub</button></div></div>
+  <p class="form-footer">¿Ya tienes cuenta? <a href="/login/">Iniciar sesión</a></p>
+</AuthPage>

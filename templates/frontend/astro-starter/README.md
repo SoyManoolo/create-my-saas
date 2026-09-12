@@ -1,6 +1,6 @@
 # Astro public-site starter
 
-Plantilla Astro estática para la parte pública de un SaaS: landing, pricing, documentación, blog, metadatos SEO, `robots.txt` y sitemap. Está diseñada para funcionar sin backend y no incluye dashboard ni autenticación.
+Plantilla Astro para la parte pública y el área protegida de un SaaS: landing, pricing, documentación, blog, metadatos SEO, `robots.txt`, sitemap y autenticación real de navegador.
 
 ## Arranque
 
@@ -10,18 +10,18 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap.
+Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap. El generador rellena `API_PROXY_TARGET` para que Astro reenvíe `/auth` y `/users` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una ruta del mismo origen que reenvíe esos prefijos; esto conserva el alcance de las cookies `HttpOnly` y CSRF.
 
 ## Qué incluye
 
-- Páginas estáticas de inicio, pricing, documentación y blog de ejemplo.
+- Páginas públicas de inicio, pricing, documentación y blog, sin precios ni métricas inventadas.
 - Etiquetas `description`, canonical, Open Graph y Twitter Card por página.
 - `@astrojs/sitemap` y una ruta `robots.txt`.
-- Un formulario de contacto con validación de navegador y un script aislado; todavía no envía datos. Conéctalo a un endpoint o proveedor de formularios cuando el producto lo necesite.
+- Registro, login, sesión con refresh cookie `HttpOnly`, rutas protegidas, logout, recuperación, verificación de correo y OAuth Google/GitHub.
 
 ## Límites deliberados
 
-Esta plantilla no consume el contrato de autenticación común ni requiere backend. Para un dashboard autenticado usa `frontend:nextjs` o un futuro starter de aplicación. Mantén las páginas de marketing y el contenido público aquí para conservar una carga inicial mínima.
+Requiere un backend que implemente el contrato común de autenticación, CSRF y OAuth PKCE. Configura las credenciales y URLs de callback de Google/GitHub en ese backend; el navegador nunca recibe secretos OAuth ni el refresh token.
 
 ## Verificación
 
