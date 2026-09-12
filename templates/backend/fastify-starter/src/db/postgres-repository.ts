@@ -1,13 +1,33 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
-import type { SessionRepository, StoredSession, StoredUser } from '../types.js';
+import type { OneTimeTokenKind, SessionRepository, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../types.js';
 
 type UserRow = {
   id: string;
   email: string;
   name: string;
-  password_hash: string;
+  password_hash: string | null;
+  email_verified: boolean;
+  is_active: boolean;
   created_at: Date;
+};
+
+type OneTimeTokenRow = {
+  id: string;
+  user_id: string;
+  kind: OneTimeTokenKind;
+  token_hash: string;
+  expires_at: Date;
+  used_at: Date | null;
+};
+
+type OAuthStateRow = {
+  id: string;
+  provider: string;
+  state_hash: string;
+  code_verifier: string;
+  expires_at: Date;
+  used_at: Date | null;
 };
 
 type SessionRow = {
@@ -26,8 +46,18 @@ function publicUser(row: UserRow): StoredUser {
     email: row.email,
     name: row.name,
     passwordHash: row.password_hash,
+    emailVerified: row.email_verified,
+    isActive: row.is_active,
     createdAt: row.created_at.toISOString(),
   };
+}
+
+function oneTimeToken(row: OneTimeTokenRow): StoredOneTimeToken {
+  return { id: row.id, userId: row.user_id, kind: row.kind, tokenHash: row.token_hash, expiresAt: row.expires_at, usedAt: row.used_at };
+}
+
+function oauthState(row: OAuthStateRow): StoredOAuthState {
+  return { id: row.id, provider: row.provider, stateHash: row.state_hash, codeVerifier: row.code_verifier, expiresAt: row.expires_at, usedAt: row.used_at };
 }
 
 function session(row: SessionRow): StoredSession {
@@ -45,27 +75,35 @@ function session(row: SessionRow): StoredSession {
 export class PostgresSessionRepository implements SessionRepository {
   constructor(private readonly sql: postgres.Sql) {}
 
-  async createUser(input: { email: string; name: string; passwordHash: string }): Promise<StoredUser> {
+  async createUser(input: { email: string; name: string; passwordHash: string | null; emailVerified?: boolean }): Promise<StoredUser> {
     const rows = await this.sql<UserRow[]>`
-      insert into users (id, email, name, password_hash)
-      values (${randomUUID()}, ${input.email}, ${input.name}, ${input.passwordHash})
-      returning id, email, name, password_hash, created_at
+      insert into users (id, email, name, password_hash, email_verified)
+      values (${randomUUID()}, ${input.email}, ${input.name}, ${input.passwordHash}, ${input.emailVerified ?? false})
+      returning id, email, name, password_hash, email_verified, is_active, created_at
     `;
     return publicUser(rows[0]);
   }
 
   async findUserByEmail(email: string): Promise<StoredUser | undefined> {
     const rows = await this.sql<UserRow[]>`
-      select id, email, name, password_hash, created_at from users where email = ${email}
+      select id, email, name, password_hash, email_verified, is_active, created_at from users where email = ${email}
     `;
     return rows[0] ? publicUser(rows[0]) : undefined;
   }
 
   async findUserById(id: string): Promise<StoredUser | undefined> {
     const rows = await this.sql<UserRow[]>`
-      select id, email, name, password_hash, created_at from users where id = ${id}
+      select id, email, name, password_hash, email_verified, is_active, created_at from users where id = ${id}
     `;
     return rows[0] ? publicUser(rows[0]) : undefined;
+  }
+
+  async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
+    await this.sql`update users set password_hash = ${passwordHash} where id = ${userId}`;
+  }
+
+  async setEmailVerified(userId: string): Promise<void> {
+    await this.sql`update users set email_verified = true where id = ${userId}`;
   }
 
   async createSession(input: StoredSession): Promise<void> {
@@ -126,5 +164,44 @@ export class PostgresSessionRepository implements SessionRepository {
 
   async revokeSession(id: string): Promise<void> {
     await this.sql`update browser_sessions set revoked_at = now() where id = ${id} and revoked_at is null`;
+  }
+
+  async revokeSessionsForUser(userId: string): Promise<void> {
+    await this.sql`update browser_sessions set revoked_at = now() where user_id = ${userId} and revoked_at is null`;
+  }
+
+  async createOneTimeToken(input: StoredOneTimeToken): Promise<void> {
+    await this.sql.begin(async (transaction) => {
+      await transaction`update auth_tokens set used_at = now() where user_id = ${input.userId} and kind = ${input.kind} and used_at is null`;
+      await transaction`
+        insert into auth_tokens (id, user_id, kind, token_hash, expires_at)
+        values (${input.id}, ${input.userId}, ${input.kind}, ${input.tokenHash}, ${input.expiresAt})
+      `;
+    });
+  }
+
+  async consumeOneTimeToken(tokenHash: string, kind: OneTimeTokenKind): Promise<StoredOneTimeToken | undefined> {
+    const rows = await this.sql<OneTimeTokenRow[]>`
+      update auth_tokens set used_at = now()
+      where token_hash = ${tokenHash} and kind = ${kind} and used_at is null and expires_at > now()
+      returning id, user_id, kind, token_hash, expires_at, used_at
+    `;
+    return rows[0] ? oneTimeToken(rows[0]) : undefined;
+  }
+
+  async createOAuthState(input: StoredOAuthState): Promise<void> {
+    await this.sql`
+      insert into oauth_states (id, provider, state_hash, code_verifier, expires_at)
+      values (${input.id}, ${input.provider}, ${input.stateHash}, ${input.codeVerifier}, ${input.expiresAt})
+    `;
+  }
+
+  async consumeOAuthState(provider: string, stateHash: string): Promise<StoredOAuthState | undefined> {
+    const rows = await this.sql<OAuthStateRow[]>`
+      update oauth_states set used_at = now()
+      where provider = ${provider} and state_hash = ${stateHash} and used_at is null and expires_at > now()
+      returning id, provider, state_hash, code_verifier, expires_at, used_at
+    `;
+    return rows[0] ? oauthState(rows[0]) : undefined;
   }
 }

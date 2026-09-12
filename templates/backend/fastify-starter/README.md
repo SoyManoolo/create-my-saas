@@ -28,6 +28,14 @@ authentication. PostgreSQL must be running at `DATABASE_URL` before migrating.
 | `POST /auth/refresh` | Requires refresh cookie plus `X-CSRF-Token`; rotates both credentials and returns `{ accessToken, user }`. |
 | `POST /auth/logout` | Requires CSRF, revokes the session, and clears cookies. |
 | `GET /users/me` | Requires `Authorization: Bearer <accessToken>` and returns `{ user }`. |
+| `POST /auth/password/reset/request` | Always returns `204`; if an active account exists, sends a reset link without exposing a token or account existence. |
+| `POST /auth/password/reset/confirm` | Consumes a one-use reset token, changes the password, and revokes all browser sessions. |
+| `POST /auth/email/verify` | Consumes a one-use verification token and marks the email verified. |
+| `POST /auth/email/resend` | Requires an access token and sends a replacement verification link when needed. |
+| `GET /auth/oauth/providers` | Lists Google and GitHub and whether each is configured. |
+| `GET /auth/oauth/:provider` | Creates a server-side PKCE state and returns `{ authorizationUrl }`. |
+| `GET /auth/oauth/:provider/start` | Browser redirect variant of the previous route. |
+| `GET /auth/oauth/:provider/callback` | Consumes PKCE state, creates or finds the user, sets browser cookies, then redirects to the frontend callback. |
 
 `refresh_token` is scoped to `/auth` and `csrf_token` is intentionally readable
 across `/` so an application route can call `/auth/refresh` or `/auth/logout`.
@@ -38,6 +46,33 @@ to `localStorage`, a cookie, or server-rendered HTML. In production set
 Every failed API response uses `{ "error": { "code", "message" } }`, matching
 the other backend starters.
 
-The included migration creates only users and refreshable browser sessions. Add
-your own domain tables and migrations rather than storing application data in a
-cookie or process memory.
+## Account recovery, email verification and OAuth
+
+Registration sends a verification link. Password-reset requests deliberately
+return `204` for both known and unknown addresses, and neither API response
+contains a raw token. Reset and verification tokens are 48-byte opaque values;
+only their SHA-256 hashes are stored, each expires, and consuming a token is an
+atomic one-time operation. Issuing a replacement invalidates the outstanding
+token of the same kind. A successful password reset revokes every browser
+session for that user.
+
+Email is delivered through the authenticated HTTPS adapter configured by
+`EMAIL_DELIVERY_URL` and `EMAIL_DELIVERY_TOKEN`. Delivery is a no-op locally so
+the starter can run without external services; production requires an HTTPS URL
+and token and fails closed if delivery is unavailable. Connect this endpoint to
+your transactional provider or a small provider-specific adapter that accepts
+`{ to, subject, text }` with a bearer token.
+
+OAuth supports Google and GitHub authorization-code flow with PKCE. Enable it
+only after configuring a client ID, secret and registered callback URI for the
+provider. `state` is stored only as a hash; the code verifier remains server
+side, expires in ten minutes and can be consumed once. Google must assert a
+verified email; GitHub uses its primary verified-email endpoint when the profile
+does not contain one. OAuth users are automatically marked as email verified.
+
+These authentication flows intentionally live only in this backend starter and
+its API contract. They do not add, change, or assume any dashboard screens.
+
+The included migrations create users, refreshable browser sessions, one-time
+authentication tokens and OAuth states. Add your own domain tables and
+migrations rather than storing application data in a cookie or process memory.
