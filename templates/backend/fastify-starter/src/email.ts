@@ -17,7 +17,7 @@ export class SecureEmailSender implements EmailSender {
   async send(recipient: string, subject: string, text: string): Promise<void> {
     const { EMAIL_DELIVERY_URL: url, EMAIL_DELIVERY_TOKEN: token } = this.config;
     if (!url || !token) {
-      if (this.config.NODE_ENV === 'production') throw new EmailDeliveryError();
+      if (this.config.environment === 'production' || this.config.environment === 'staging') throw new EmailDeliveryError();
       return;
     }
     try {

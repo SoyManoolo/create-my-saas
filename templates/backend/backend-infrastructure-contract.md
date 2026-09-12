@@ -1,8 +1,8 @@
-# Contrato de infraestructura: FastAPI y Nest
+# Contrato de infraestructura: FastAPI, Nest y Fastify
 
-Los dos starters comparten este contrato operativo. La implementación interna puede
-usar SQLAlchemy/asyncpg o TypeORM/pg, pero cambiar uno de estos puntos exige cambiar
-ambos starters y sus ejemplos de entorno.
+Los tres starters comparten este contrato operativo. La implementación interna puede
+usar SQLAlchemy/asyncpg, TypeORM/pg o Fastify/pg, pero cambiar uno de estos puntos
+exige cambiar los tres starters y sus ejemplos de entorno.
 
 | Área | Contrato |
 | --- | --- |

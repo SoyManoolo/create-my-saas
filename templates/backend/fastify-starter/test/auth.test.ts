@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { createApp } from '../src/app.js';
-import type { Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config.js';
 import type { EmailSender } from '../src/email.js';
 import type { OneTimeTokenKind, SessionRepository, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../src/types.js';
 
@@ -74,19 +74,55 @@ class InMemorySessions implements SessionRepository {
 }
 
 const config: Config = {
-  NODE_ENV: 'test', PORT: 3002, DATABASE_URL: 'postgresql://unused', FRONTEND_URL: 'http://localhost:3000',
+  APP_ENV: 'test', NODE_ENV: 'test', environment: 'test', PORT: 3002, DATABASE_URL: 'postgresql://unused', FRONTEND_URL: 'http://localhost:3000',
   CORS_ORIGINS: 'http://localhost:3000', SECRET_KEY: 'test-secret-that-is-long-enough-for-validation',
   ACCESS_TOKEN_EXPIRE_MINUTES: 15, REFRESH_TOKEN_EXPIRE_DAYS: 30,
   PASSWORD_RESET_EXPIRE_MINUTES: 60, EMAIL_VERIFICATION_EXPIRE_MINUTES: 1_440,
   REFRESH_COOKIE_NAME: 'refresh_token', CSRF_COOKIE_NAME: 'csrf_token',
   COOKIE_SECURE: false, COOKIE_SAME_SITE: 'lax', origins: ['http://localhost:3000'],
   EMAIL_DELIVERY_URL: undefined, EMAIL_DELIVERY_TOKEN: undefined,
+  RATE_LIMIT_ENABLED: true, RATE_LIMIT_REQUESTS: 30, RATE_LIMIT_WINDOW_SECONDS: 60, RATE_LIMIT_PREFIX: 'rate-limit', REDIS_URL: undefined,
+  TRUST_PROXY_HEADERS: false, TRUSTED_PROXY_IPS: '', trustedProxyIps: [],
   OAUTH_ENABLED: false,
   OAUTH_GOOGLE_CLIENT_ID: undefined, OAUTH_GOOGLE_CLIENT_SECRET: undefined, OAUTH_GOOGLE_AUTHORIZATION_URL: undefined,
   OAUTH_GOOGLE_TOKEN_URL: undefined, OAUTH_GOOGLE_USERINFO_URL: undefined, OAUTH_GOOGLE_REDIRECT_URI: undefined, OAUTH_GOOGLE_SCOPES: undefined,
   OAUTH_GITHUB_CLIENT_ID: undefined, OAUTH_GITHUB_CLIENT_SECRET: undefined, OAUTH_GITHUB_AUTHORIZATION_URL: undefined,
   OAUTH_GITHUB_TOKEN_URL: undefined, OAUTH_GITHUB_USERINFO_URL: undefined, OAUTH_GITHUB_REDIRECT_URI: undefined, OAUTH_GITHUB_SCOPES: undefined,
 };
+
+test('rate-limit configuration requires TLS Redis in protected environments and explicit proxies', () => {
+  const protectedEnvironment = {
+    APP_ENV: 'staging', DATABASE_URL: 'postgresql://db.example.test/app', FRONTEND_URL: 'https://app.example.test',
+    CORS_ORIGINS: 'https://app.example.test', SECRET_KEY: 'a'.repeat(32), COOKIE_SECURE: 'true',
+    EMAIL_DELIVERY_URL: 'https://mail.example.test/send', EMAIL_DELIVERY_TOKEN: 'token',
+  };
+  assert.throws(() => loadConfig(protectedEnvironment), /TLS REDIS_URL/);
+  assert.throws(() => loadConfig({ ...protectedEnvironment, REDIS_URL: 'rediss://redis.example.test', TRUST_PROXY_HEADERS: 'true' }), /TRUSTED_PROXY_IPS/);
+});
+
+test('rate limiting returns 429 with Retry-After and fails closed in protected environments', async () => {
+  const app = await createApp({ config: { ...config, RATE_LIMIT_REQUESTS: 1 }, repository: new InMemorySessions() });
+  try {
+    const first = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'first@example.com', name: 'First', password: 'password1' } });
+    const limited = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'second@example.com', name: 'Second', password: 'password1' } });
+    assert.equal(first.statusCode, 201);
+    assert.equal(limited.statusCode, 429);
+    assert.equal(limited.headers['retry-after'], '60');
+    assert.deepEqual(limited.json(), { error: { code: 'RATE_LIMITED', message: 'Too many requests.' } });
+  } finally {
+    await app.close();
+  }
+
+  const protectedApp = await createApp({ config: { ...config, environment: 'staging' }, repository: new InMemorySessions() });
+  try {
+    const unavailable = await protectedApp.inject({ method: 'POST', url: '/auth/register', payload: { email: 'unavailable@example.com', name: 'Unavailable', password: 'password1' } });
+    assert.equal(unavailable.statusCode, 503);
+    assert.equal(unavailable.headers['retry-after'], '60');
+    assert.deepEqual(unavailable.json(), { error: { code: 'RATE_LIMIT_UNAVAILABLE', message: 'Request limiting is temporarily unavailable.' } });
+  } finally {
+    await protectedApp.close();
+  }
+});
 
 class CapturingEmailSender implements EmailSender {
   readonly messages: Array<{ recipient: string; subject: string; text: string }> = [];

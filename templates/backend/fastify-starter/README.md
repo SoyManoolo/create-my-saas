@@ -19,6 +19,22 @@ pnpm dev
 The API listens on `http://localhost:3002`; `GET /health` is available without
 authentication. PostgreSQL must be running at `DATABASE_URL` before migrating.
 
+## Rate limiting and proxies
+
+Requests except `GET /health` are limited by client IP, HTTP method and route.
+The shared settings are `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` (default
+`30`), `RATE_LIMIT_WINDOW_SECONDS` (default `60`), `RATE_LIMIT_PREFIX`, and
+`REDIS_URL`. Redis is used for a counter shared by every worker; local
+development and test can fall back to memory if Redis is unavailable. Staging
+and production require `RATE_LIMIT_ENABLED=true` and a TLS `rediss://` URL;
+an unavailable store returns `503 RATE_LIMIT_UNAVAILABLE`, while an exceeded
+limit returns `429 RATE_LIMITED` with `Retry-After`.
+
+By default the socket IP is used. Set `TRUST_PROXY_HEADERS=true` only with
+explicit `TRUSTED_PROXY_IPS`; Fastify then accepts forwarded client identity
+only from those peers. Never use `*`: the proxy must discard incoming
+forwarding headers and reconstruct them itself.
+
 ## Browser authentication contract
 
 | Route | Behaviour |

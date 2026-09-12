@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "kind": "backend",
   "displayName": "Fastify starter",
-  "description": "Fastify TypeScript SaaS API with PostgreSQL-backed browser sessions and CSRF protection.",
+  "description": "Fastify TypeScript SaaS API with PostgreSQL-backed browser sessions, CSRF protection, and Redis-backed rate limiting.",
   "runtime": {
     "language": "node",
     "version": ">=20",
@@ -17,7 +17,8 @@
     "users.profile",
     "database.postgresql",
     "database.migrations",
-    "security.csrf"
+    "security.csrf",
+    "security.rate-limiting"
   ],
   "development": {
     "port": 3002,

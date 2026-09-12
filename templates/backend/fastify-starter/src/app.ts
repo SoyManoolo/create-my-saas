@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { z } from 'zod';
 import type { Config } from './config.js';
 import { EmailDeliveryError, SecureEmailSender, type EmailSender } from './email.js';
+import { RateLimiter } from './rate-limit.js';
 import type { OneTimeTokenKind, PublicUser, SessionRepository, StoredSession, StoredUser } from './types.js';
 
 const registerBody = z.object({
@@ -165,7 +166,11 @@ function requireCsrf(request: FastifyRequest, reply: FastifyReply, config: Confi
 }
 
 export async function createApp({ config, repository, emailSender = new SecureEmailSender(config) }: AppDependencies): Promise<FastifyInstance> {
-  const app = Fastify({ logger: config.NODE_ENV !== 'test' });
+  const app = Fastify({
+    logger: config.environment !== 'test',
+    trustProxy: config.TRUST_PROXY_HEADERS ? config.trustedProxyIps : false,
+  });
+  const rateLimiter = new RateLimiter(config);
   await app.register(cookie);
   await app.register(cors, {
     credentials: true,
@@ -184,6 +189,18 @@ export async function createApp({ config, repository, emailSender = new SecureEm
     }
     app.log.error(error);
     return sendError(reply, 500, 'INTERNAL_ERROR', 'An unexpected error occurred.');
+  });
+
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.url.split('?', 1)[0] === '/health') return;
+    const path = request.routeOptions.url ?? request.url.split('?', 1)[0];
+    const result = await rateLimiter.consume(`${request.method}:${path}:${request.ip}`);
+    if (result === 'limited') {
+      return sendError(reply.header('Retry-After', String(config.RATE_LIMIT_WINDOW_SECONDS)), 429, 'RATE_LIMITED', 'Too many requests.');
+    }
+    if (result === 'unavailable') {
+      return sendError(reply.header('Retry-After', '60'), 503, 'RATE_LIMIT_UNAVAILABLE', 'Request limiting is temporarily unavailable.');
+    }
   });
 
   const cookieOptions = (httpOnly: boolean, path: string, maxAge: number) => ({
