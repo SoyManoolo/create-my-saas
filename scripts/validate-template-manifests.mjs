@@ -8,10 +8,11 @@ const versionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const capabilityPattern = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
 const environmentPattern = /^[A-Z][A-Z0-9_]*$/;
 const allowedTopLevelFields = new Set([
-  '$schema', 'schemaVersion', 'id', 'version', 'kind', 'displayName', 'description', 'runtime', 'capabilities', 'development', 'environment',
+  '$schema', 'schemaVersion', 'id', 'version', 'kind', 'displayName', 'description', 'runtime', 'capabilities', 'development', 'compatibility', 'environment',
 ]);
 const allowedRuntimeFields = new Set(['language', 'version', 'packageManager']);
 const allowedDevelopmentFields = new Set(['port', 'baseUrl']);
+const allowedCompatibilityFields = new Set(['requiresBackendCapabilities']);
 const allowedEnvironmentFields = new Set(['required']);
 const allowedVariableFields = new Set(['name', 'secret', 'description']);
 
@@ -79,6 +80,26 @@ function validateManifest(file, manifest) {
       hasOnlyKeys(file, manifest.development, allowedDevelopmentFields, 'development');
       if (!Number.isInteger(manifest.development.port) || manifest.development.port < 1 || manifest.development.port > 65535) fail(file, 'development.port must be a valid TCP port.');
       if (typeof manifest.development.baseUrl !== 'string' || !/^https?:\/\/[^/]+(?:\/.*)?$/.test(manifest.development.baseUrl)) fail(file, 'development.baseUrl must be an absolute HTTP(S) URL.');
+    }
+  }
+
+  if (manifest.compatibility !== undefined) {
+    if (manifest.kind !== 'frontend') {
+      fail(file, 'compatibility is only supported by frontend templates.');
+    } else if (!manifest.compatibility || Array.isArray(manifest.compatibility) || typeof manifest.compatibility !== 'object') {
+      fail(file, 'compatibility must be an object.');
+    } else {
+      hasOnlyKeys(file, manifest.compatibility, allowedCompatibilityFields, 'compatibility');
+      if (!Array.isArray(manifest.compatibility.requiresBackendCapabilities)) {
+        fail(file, 'compatibility.requiresBackendCapabilities must be an array.');
+      } else {
+        const requiredCapabilities = new Set();
+        for (const capability of manifest.compatibility.requiresBackendCapabilities) {
+          if (typeof capability !== 'string' || !capabilityPattern.test(capability)) fail(file, 'compatibility capabilities must use dot-separated lowercase identifiers.');
+          if (requiredCapabilities.has(capability)) fail(file, `compatibility.requiresBackendCapabilities contains duplicate "${capability}".`);
+          requiredCapabilities.add(capability);
+        }
+      }
     }
   }
 

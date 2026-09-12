@@ -18,6 +18,16 @@
     "auth.protected-routes",
     "rendering.ssr"
   ],
+  "compatibility": {
+    "requiresBackendCapabilities": [
+      "auth.password",
+      "auth.refresh-sessions",
+      "auth.email-verification",
+      "auth.password-recovery",
+      "users.profile",
+      "security.csrf"
+    ]
+  },
   "environment": {
     "required": [
       {

@@ -43,6 +43,26 @@ model, for example, declares `billing.subscription-domain`; it must not claim
 5. Run `node scripts/validate-template-manifests.mjs` and add generator matrix
    coverage once the CLI supports the new template.
 
+## Browser-session frontends
+
+A frontend that declares `auth.browser-sessions` must include an
+`API_PROXY_TARGET` entry in `.env.example`. When it is generated together with a
+backend, the CLI replaces that value with the backend's declared local URL. The
+frontend must proxy browser requests under its own origin so `HttpOnly` refresh
+cookies and the browser-readable CSRF cookie follow the shared authentication
+contract.
+
+Static-first frontends, such as Astro, should not claim
+`auth.browser-sessions`. They can be generated independently and should only
+add a backend integration when their own documented feature needs one.
+
+## Compatibility
+
+Dynamic frontends declare `compatibility.requiresBackendCapabilities`. The CLI
+checks those values against the selected backend before writing a project and
+explains any missing capabilities. This keeps a partially implemented backend
+discoverable without generating a frontend whose visible routes cannot work.
+
 The CLI may present all discovered manifests, but it must reject a requested
 combination when its supported compatibility rules do not cover the selected
 backend and frontend. Manifests advertise capabilities; they do not by

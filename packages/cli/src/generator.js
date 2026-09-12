@@ -62,6 +62,19 @@ function configureFrontendApiProxyTarget(destinationDirectory, backend) {
   writeFileSync(envExamplePath, configuredContents, 'utf8');
 }
 
+function assertCompatibleTemplates(backend, frontend) {
+  const requiredCapabilities = frontend.compatibility?.requiresBackendCapabilities ?? [];
+  const backendCapabilities = new Set(backend.capabilities);
+  const missingCapabilities = requiredCapabilities.filter((capability) => !backendCapabilities.has(capability));
+
+  if (missingCapabilities.length > 0) {
+    throw new Error(
+      `Frontend "${frontend.key}" is not compatible with backend "${backend.key}". `
+      + `Missing backend capabilities: ${missingCapabilities.join(', ')}.`,
+    );
+  }
+}
+
 export function generateProject({
   destination,
   backendId,
@@ -82,6 +95,10 @@ export function generateProject({
   const backend = backendId ? findTemplate(catalog, 'backend', backendId) : undefined;
   const frontend = frontendId ? findTemplate(catalog, 'frontend', frontendId) : undefined;
 
+  if (backend && frontend) {
+    assertCompatibleTemplates(backend, frontend);
+  }
+
   mkdirSync(outputDirectory, { recursive: true });
 
   try {
@@ -93,7 +110,7 @@ export function generateProject({
       copyTemplate(templatesDirectory, outputDirectory, 'frontend', frontend);
     }
 
-    if (backend && frontend) {
+    if (backend && frontend && frontend.capabilities.includes('auth.browser-sessions')) {
       configureFrontendApiProxyTarget(outputDirectory, backend);
     }
 

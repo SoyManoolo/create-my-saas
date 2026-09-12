@@ -58,6 +58,21 @@
         "baseUrl": { "type": "string", "pattern": "^https?://[^/]+(?:/.*)?$" }
       }
     },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiresBackendCapabilities"],
+      "properties": {
+        "requiresBackendCapabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$"
+          }
+        }
+      }
+    },
     "environment": {
       "type": "object",
       "additionalProperties": false,
