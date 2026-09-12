@@ -9,6 +9,9 @@ import { Membership } from '../organizations/membership.entity';
 import { Invitation } from '../organizations/invitation.entity';
 import { BillingCustomer } from '../billing/billing-customer.entity';
 import { Subscription } from '../billing/subscription.entity';
+import { BillingEntitlement } from '../billing/billing-entitlement.entity';
+import { UsageRecord } from '../billing/usage-record.entity';
+import { BillingWebhookEvent } from '../billing/billing-webhook-event.entity';
 import { OAuthState } from '../auth/oauth-state.entity';
 
 @Module({
@@ -21,7 +24,7 @@ import { OAuthState } from '../auth/oauth-state.entity';
             type: 'sqljs',
             autoSave: false,
             synchronize: true,
-            entities: [User, AuthToken, RefreshSession, OAuthState, Organization, Membership, Invitation, BillingCustomer, Subscription],
+            entities: [User, AuthToken, RefreshSession, OAuthState, Organization, Membership, Invitation, BillingCustomer, Subscription, BillingEntitlement, UsageRecord, BillingWebhookEvent],
           };
         }
 

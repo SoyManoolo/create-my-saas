@@ -8,10 +8,14 @@ import { Membership } from '../organizations/membership.entity';
 import { Invitation } from '../organizations/invitation.entity';
 import { BillingCustomer } from '../billing/billing-customer.entity';
 import { Subscription } from '../billing/subscription.entity';
+import { BillingEntitlement } from '../billing/billing-entitlement.entity';
+import { UsageRecord } from '../billing/usage-record.entity';
+import { BillingWebhookEvent } from '../billing/billing-webhook-event.entity';
 import { OAuthState } from '../auth/oauth-state.entity';
 import { CreateUsers1773139200000 } from './migrations/1773139200000-create-users';
 import { AddSaasCore1773139300000 } from './migrations/1773139300000-add-saas-core';
 import { HardenOrganizationInvitations1773139400000 } from './migrations/1773139400000-harden-organization-invitations';
+import { AddStripeBilling1773139500000 } from './migrations/1773139500000-add-stripe-billing';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -22,7 +26,7 @@ export default new DataSource({
   type: 'postgres',
   url: databaseUrl,
   ssl: ['1', 'true', 'yes', 'on'].includes(process.env.DATABASE_SSL?.trim().toLowerCase() ?? '') ? { rejectUnauthorized: true } : false,
-  entities: [User, AuthToken, RefreshSession, OAuthState, Organization, Membership, Invitation, BillingCustomer, Subscription],
-  migrations: [CreateUsers1773139200000, AddSaasCore1773139300000, HardenOrganizationInvitations1773139400000],
+  entities: [User, AuthToken, RefreshSession, OAuthState, Organization, Membership, Invitation, BillingCustomer, Subscription, BillingEntitlement, UsageRecord, BillingWebhookEvent],
+  migrations: [CreateUsers1773139200000, AddSaasCore1773139300000, HardenOrganizationInvitations1773139400000, AddStripeBilling1773139500000],
   synchronize: false,
 });

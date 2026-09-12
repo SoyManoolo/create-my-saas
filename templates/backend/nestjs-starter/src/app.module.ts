@@ -9,6 +9,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { BillingModule } from './billing/billing.module';
 
 const environmentBoolean = (value: string | undefined): boolean => ['1', 'true', 'yes', 'on'].includes(value?.trim().toLowerCase() ?? '');
+const hasValue = (value: string | undefined): boolean => Boolean(value?.trim());
 
 @Module({
   imports: [
@@ -50,6 +51,22 @@ const environmentBoolean = (value: string | undefined): boolean => ['1', 'true',
         }
         if (environment.TRUSTED_PROXY_IPS?.split(',').map((value) => value.trim()).includes('*')) {
           throw new Error("TRUSTED_PROXY_IPS must list explicit proxy addresses; '*' is not allowed.");
+        }
+        const stripeSecret = hasValue(environment.STRIPE_SECRET_KEY);
+        const stripeWebhook = hasValue(environment.STRIPE_WEBHOOK_SECRET);
+        if (stripeSecret !== stripeWebhook) {
+          throw new Error('STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must be configured together.');
+        }
+        if (stripeSecret) {
+          try {
+            const plans = JSON.parse(environment.STRIPE_PRICE_PLANS ?? '{}');
+            if (!plans || typeof plans !== 'object' || Array.isArray(plans) || !Object.keys(plans).length) throw new Error();
+          } catch {
+            throw new Error('STRIPE_PRICE_PLANS must be a non-empty JSON object when Stripe is configured.');
+          }
+        }
+        if (hasValue(environment.STRIPE_USAGE_EVENT_NAME) && !stripeSecret) {
+          throw new Error('STRIPE_USAGE_EVENT_NAME requires Stripe billing to be configured.');
         }
         return {
           ...environment,

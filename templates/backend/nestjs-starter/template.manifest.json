@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "kind": "backend",
   "displayName": "NestJS starter",
-  "description": "Modular NestJS SaaS API with PostgreSQL, secure browser sessions, organizations, and billing domain models.",
+  "description": "Modular NestJS SaaS API with PostgreSQL, secure browser sessions, organizations, and optional Stripe Billing.",
   "runtime": {
     "language": "node",
     "packageManager": "pnpm"
@@ -19,7 +19,7 @@
     "organizations",
     "organizations.rbac",
     "organizations.invitations",
-    "billing.subscription-domain",
+    "billing.stripe",
     "oauth.pkce",
     "oauth.google",
     "oauth.github",
