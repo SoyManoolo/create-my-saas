@@ -11,6 +11,7 @@ import { Subscription } from '../billing/subscription.entity';
 import { OAuthState } from '../auth/oauth-state.entity';
 import { CreateUsers1773139200000 } from './migrations/1773139200000-create-users';
 import { AddSaasCore1773139300000 } from './migrations/1773139300000-add-saas-core';
+import { HardenOrganizationInvitations1773139400000 } from './migrations/1773139400000-harden-organization-invitations';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -22,6 +23,6 @@ export default new DataSource({
   url: databaseUrl,
   ssl: ['1', 'true', 'yes', 'on'].includes(process.env.DATABASE_SSL?.trim().toLowerCase() ?? '') ? { rejectUnauthorized: true } : false,
   entities: [User, AuthToken, RefreshSession, OAuthState, Organization, Membership, Invitation, BillingCustomer, Subscription],
-  migrations: [CreateUsers1773139200000, AddSaasCore1773139300000],
+  migrations: [CreateUsers1773139200000, AddSaasCore1773139300000, HardenOrganizationInvitations1773139400000],
   synchronize: false,
 });

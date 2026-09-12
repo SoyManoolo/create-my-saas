@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { User } from '../users/user.entity';
@@ -8,7 +8,7 @@ import { OrganizationRoleGuard } from './organization-role.guard';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationRoles } from './roles.decorator';
 class CreateOrganizationDto { @IsString() @MinLength(1) @MaxLength(255) name!: string; @IsOptional() @IsString() @MaxLength(100) slug?: string; }
-class InviteDto { @IsString() email!: string; @IsIn(['admin', 'member']) role!: 'admin' | 'member'; }
+class InviteDto { @IsEmail() @MaxLength(320) email!: string; @IsIn(['admin', 'member']) role!: 'admin' | 'member'; }
 class AcceptInvitationDto { @IsString() @MinLength(20) token!: string; }
 class ChangeRoleDto { @IsIn(['admin', 'member']) role!: OrganizationRole; }
 @Controller('organizations') @UseGuards(JwtAuthGuard)

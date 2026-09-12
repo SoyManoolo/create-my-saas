@@ -1,7 +1,7 @@
 import { BeforeInsert, Column, Entity, Index, PrimaryColumn } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 const dateType: 'datetime' | 'timestamptz' = process.env.NODE_ENV === 'test' ? 'datetime' : 'timestamptz';
-@Entity({ name: 'invitations' }) @Index(['tokenHash'], { unique: true })
+@Entity({ name: 'invitations' }) @Index(['tokenHash'], { unique: true }) @Index(['organizationId', 'email'], { unique: true, where: '"accepted_at" IS NULL' })
 export class Invitation {
  @PrimaryColumn('uuid') id!: string;
  @Column({ name: 'organization_id', type: 'uuid' }) organizationId!: string;
