@@ -10,7 +10,7 @@ from src.modules.auth.security.tokens import get_current_user
 from src.modules.auth.service import AuthService
 from src.modules.users.model import TokenPurpose, User
 from src.modules.users.repository import UserRepository
-from src.modules.users.schemas import ChangePassword, ResetPasswordConfirm, ResetPasswordRequest, TokenRequest, UserLogin, UserPublic
+from src.modules.users.schemas import ChangePassword, ResetPasswordConfirm, ResetPasswordRequest, TokenRequest, UserLogin, UserPublic, UserRegister
 from src.core.email import EmailDeliveryError
 
 router = APIRouter(prefix="/auth", tags=["auth"])

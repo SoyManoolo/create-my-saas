@@ -118,6 +118,8 @@ class AuthenticationApiTests(unittest.TestCase):
 
         response = self.login()
         self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json()["accessToken"], str)
+        self.assertEqual(response.json()["user"]["email"], self.registration["email"])
         self.assertIsInstance(response.json()["access_token"], str)
         self.assertNotIn("refresh_token", response.json())
         self.assertIn(f"{settings.refresh_cookie_name}=", response.headers["set-cookie"])
@@ -206,3 +208,17 @@ class AuthenticationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["email_verified"])
         consume.assert_awaited_once_with("a" * 32, TokenPurpose.EMAIL_VERIFICATION)
+
+    def test_browser_contract_routes_are_available(self):
+        registered_routes = []
+        for route in app.routes:
+            registered_routes.extend(getattr(getattr(route, "original_router", None), "routes", [route]))
+        routes = {(method, route.path) for route in registered_routes for method in getattr(route, "methods", set())}
+        expected = {
+            ("POST", "/auth/password/reset/request"),
+            ("POST", "/auth/password/reset/confirm"),
+            ("POST", "/auth/email/verify"),
+            ("POST", "/auth/email/resend"),
+            ("POST", "/auth/password/change"),
+        }
+        self.assertTrue(expected.issubset(routes))
