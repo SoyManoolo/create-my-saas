@@ -55,24 +55,24 @@ jobs:
           grep -Fx "API_PROXY_TARGET=http://localhost:${{ matrix.api_port }}" "$project/frontend/.env.example"
 
   generated-static-site:
-    name: Generated Astro public site and Fastify API
+    name: Generated Astro site and FastAPI API
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Generate static frontend with a compatible API
+      - name: Generate Astro frontend with a compatible API
         run: >-
           node packages/cli/bin/create-my-saas.js
-          "$RUNNER_TEMP/astro-public-site" --backend fastify --frontend astro
-      - name: Verify static project configuration
+          "$RUNNER_TEMP/astro-fastapi-site" --backend fastapi --frontend astro
+      - name: Verify generated Astro project configuration
         run: |
-          project="$RUNNER_TEMP/astro-public-site"
+          project="$RUNNER_TEMP/astro-fastapi-site"
           test -f "$project/.create-my-saas.json"
           grep -Fx "PUBLIC_SITE_URL=https://example.com" "$project/frontend/.env.example"
           test -f "$project/frontend/src/pages/index.astro"
-          test -f "$project/backend/src/app.ts"
+          test -f "$project/backend/main.py"
 
   nestjs:
     name: NestJS starter
@@ -140,7 +140,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra rate-limit --locked
+      - run: uv sync --locked
       - run: uv run alembic upgrade head
       - run: uv run python -m unittest discover -s tests
 
