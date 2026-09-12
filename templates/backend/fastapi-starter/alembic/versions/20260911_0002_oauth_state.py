@@ -1,7 +1,9 @@
-"""Persist OAuth state and its PKCE verifier server-side."""
+"""Compatibility marker for the OAuth-state migration.
 
-from alembic import op
-import sqlalchemy as sa
+Revision 0001 already created this table in the published baseline. Keeping this
+revision as a no-op lets databases stamped with the old history advance safely
+and makes a new database install deterministic.
+"""
 
 revision = "20260911_0002"
 down_revision = "20260911_0001"
@@ -10,18 +12,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "oauth_states",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("provider", sa.String(length=80), nullable=False),
-        sa.Column("state_hash", sa.String(length=64), nullable=False),
-        sa.Column("code_verifier", sa.String(length=128), nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("state_hash"),
-    )
+    pass
 
 
 def downgrade() -> None:
-    op.drop_table("oauth_states")
+    pass
