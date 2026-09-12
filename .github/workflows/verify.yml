@@ -107,9 +107,9 @@ jobs:
           version: 11
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec tsc --noEmit -p tsconfig.json
-      - run: pnpm run test -- --runInBand
+      - run: node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand
       - run: pnpm run migration:run
-      - run: pnpm run test:e2e -- --runInBand
+      - run: node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --runInBand
 
   fastapi:
     name: FastAPI starter
