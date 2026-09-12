@@ -20,7 +20,15 @@ describe('BillingService', () => {
       getOrThrow: jest.fn((key: string) => values[key]),
     };
     return {
-      service: new BillingService(customers as Repository<BillingCustomer>, subscriptions as Repository<Subscription>, entitlements as Repository<BillingEntitlement>, usage as Repository<UsageRecord>, organizations as Repository<Organization>, dataSource as DataSource, config as ConfigService),
+      service: new BillingService(
+        customers as unknown as Repository<BillingCustomer>,
+        subscriptions as unknown as Repository<Subscription>,
+        entitlements as unknown as Repository<BillingEntitlement>,
+        usage as unknown as Repository<UsageRecord>,
+        organizations as unknown as Repository<Organization>,
+        dataSource as unknown as DataSource,
+        config as unknown as ConfigService,
+      ),
       events, config,
     };
   }
