@@ -31,13 +31,15 @@ class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
 
 class ChangePassword(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=8, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
+    current_password: str = Field(validation_alias="currentPassword")
+    new_password: str = Field(min_length=8, max_length=128, validation_alias="newPassword")
     _validate_password = field_validator("new_password")(validate_password_strength)
 
 class ResetPasswordRequest(BaseModel): email: EmailStr
 class ResetPasswordConfirm(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     token: str = Field(min_length=20)
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128, validation_alias="newPassword")
     _validate_password = field_validator("new_password")(validate_password_strength)
 class TokenRequest(BaseModel): token: str = Field(min_length=20)

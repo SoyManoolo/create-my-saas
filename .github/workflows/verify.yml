@@ -1,0 +1,105 @@
+name: Verify starter templates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  generator:
+    name: Generator CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run generator tests
+        run: node --test packages/cli/test
+
+  nestjs:
+    name: NestJS starter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/backend/nestjs-starter
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: nestjs_starter
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nestjs_starter"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_starter
+      SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit -p tsconfig.json
+      - run: pnpm run test -- --runInBand
+      - run: pnpm run migration:run
+      - run: pnpm run test:e2e -- --runInBand
+
+  fastapi:
+    name: FastAPI starter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/backend/fastapi-starter
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
+      SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra rate-limit --locked
+      - run: uv run alembic upgrade head
+      - run: uv run python -m unittest discover -s tests
+
+  nextjs:
+    name: Next.js starter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/frontend/nextjs-starter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build

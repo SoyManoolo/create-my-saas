@@ -26,7 +26,7 @@ export function configureApplication(app: INestApplication): void {
     origin: origins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'X-Request-ID'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Request-ID'],
   });
   app.useGlobalPipes(
     new ValidationPipe({

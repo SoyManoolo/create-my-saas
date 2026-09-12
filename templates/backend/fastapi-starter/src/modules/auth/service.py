@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
 from src.core.email import send_secure_email
 from src.modules.users.repository import UserRepository
-from src.modules.users.schemas import UserLogin, UserRegister
+from src.modules.users.schemas import UserLogin, UserPublic, UserRegister
 from src.modules.users.model import RefreshToken, OneTimeToken, TokenPurpose, User
 from src.modules.auth.security.password import hash_password, verify_password
 from src.modules.auth.security.tokens import encode_access_token, opaque_token, token_hash, utc_now
@@ -27,7 +27,16 @@ class AuthService:
         return raw, RefreshToken(user_id=user.id, jti=opaque_token()[:48], token_hash=token_hash(raw), expires_at=utc_now() + timedelta(days=settings.refresh_token_expire_days))
 
     def _session_response(self, user: User) -> dict:
-        return {"access_token": encode_access_token(user.id), "token_type": "bearer", "expires_in": settings.access_token_expire_minutes * 60}
+        access_token = encode_access_token(user.id)
+        # Keep the legacy snake_case field during the starter transition, while
+        # exposing the browser contract consumed by every frontend template.
+        return {
+            "accessToken": access_token,
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": settings.access_token_expire_minutes * 60,
+            "user": UserPublic.model_validate(user).model_dump(mode="json"),
+        }
 
     async def issue_session(self, user: User) -> tuple[dict, str]:
         raw, record = self._new_session(user)
