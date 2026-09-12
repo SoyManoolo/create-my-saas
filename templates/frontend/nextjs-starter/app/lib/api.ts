@@ -79,6 +79,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export type Authentication = { accessToken: string; user: User };
+export type OAuthProvider = "google" | "github";
 
 function authentication(input: Record<string, unknown>): Authentication {
   return { accessToken: String(input.accessToken ?? input.access_token), user: normaliseUser(input.user as Record<string, unknown>) };
@@ -94,4 +95,26 @@ export const api = {
   resetPassword: (token: string, newPassword: string) => request<void>("/auth/password/reset/confirm", { method: "POST", body: { token, newPassword } }),
   verifyEmail: (token: string) => request<void>("/auth/email/verify", { method: "POST", body: { token } }),
   resendEmailVerification: (accessToken: string) => request<void>("/auth/email/resend", { method: "POST", accessToken }),
+  beginOAuth: async (provider: OAuthProvider): Promise<never> => {
+    // Nest reports configured providers and returns a URL. FastAPI has no
+    // provider list and owns the redirect at /start. Both keep PKCE and
+    // provider secrets on the backend.
+    try {
+      const providers = await request<Array<{ provider: string; configured: boolean }>>("/auth/oauth/providers", { method: "GET" });
+      if (!providers.some((item) => item.provider === provider && item.configured)) {
+        throw new ApiError("Este proveedor OAuth no está configurado.", 400, "OAUTH_PROVIDER_UNAVAILABLE");
+      }
+      const result = await request<Record<string, unknown>>(`/auth/oauth/${provider}`, { method: "GET" });
+      if (typeof result.authorizationUrl === "string" && result.authorizationUrl) {
+        window.location.assign(result.authorizationUrl);
+        return new Promise<never>(() => undefined);
+      }
+      throw new ApiError("El proveedor OAuth no devolvió una URL de autorización.", 502, "OAUTH_PROVIDER_ERROR");
+    } catch (cause) {
+      if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- FastAPI must own the provider redirect and callback cookies.
+      window.location.assign(`${apiBaseUrl}/auth/oauth/${provider}/start`);
+      return new Promise<never>(() => undefined);
+    }
+  },
 };

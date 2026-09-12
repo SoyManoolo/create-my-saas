@@ -1,6 +1,6 @@
 # React Router Framework SaaS starter
 
-Frontend reutilizable para un SaaS dinámico, construido con React Router en Framework Mode y Vite. Incluye renderizado en servidor, rutas públicas y protegidas, sesión de navegador, recuperación de contraseña y verificación de email. Es compatible con los backends que implementen el contrato común del proyecto.
+Frontend reutilizable para un SaaS dinámico, construido con React Router en Framework Mode y Vite. Incluye renderizado en servidor, rutas públicas y protegidas, sesión de navegador, recuperación de contraseña, verificación de email, OAuth Google/GitHub y cierre de sesión. Es compatible con los backends que implementen el contrato común del proyecto.
 
 El access token sólo vive en memoria de la pestaña. El refresh token permanece en una cookie `HttpOnly`; la cookie CSRF no secreta se lee en el navegador para enviar `X-CSRF-Token` en las operaciones que cambian estado. Nunca se usa `localStorage` para tokens.
 
@@ -31,6 +31,7 @@ La plantilla consume las rutas canónicas:
 - `POST /auth/logout` — con `X-CSRF-Token`
 - `GET /users/me` — con `Authorization: Bearer <accessToken>`
 - `POST /auth/password/reset/request`, `POST /auth/password/reset/confirm`, `POST /auth/email/verify`, `POST /auth/email/resend`
+- OAuth Google/GitHub: Nest entrega `authorizationUrl` en `GET /auth/oauth/:provider`; FastAPI inicia el navegador en `GET /auth/oauth/:provider/start`. Los dos regresan a `/auth/oauth/callback` para restaurar la sesión.
 
 Tras cargar la aplicación se intenta `POST /auth/refresh`; si falla, las rutas protegidas redirigen al login. El proxy de `app/routes/api-proxy.ts` está limitado a las rutas de API declaradas y mantiene el valor de `API_PROXY_TARGET` exclusivamente en el servidor.
 

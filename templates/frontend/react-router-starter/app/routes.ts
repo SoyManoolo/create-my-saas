@@ -7,6 +7,7 @@ export default [
   route("forgot-password", "routes/forgot-password.tsx"),
   route("reset-password", "routes/reset-password.tsx"),
   route("verify-email", "routes/verify-email.tsx"),
+  route("auth/oauth/callback", "routes/oauth-callback.tsx"),
   route("app", "routes/app.tsx"),
   route("account", "routes/account.tsx"),
   route("auth/*", "routes/auth-proxy.ts"),

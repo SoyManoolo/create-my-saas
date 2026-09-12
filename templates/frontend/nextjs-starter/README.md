@@ -1,6 +1,6 @@
 # Next.js SaaS starter
 
-Frontend reutilizable para un SaaS, compatible con los backends que implementen el contrato común del proyecto. Incluye autenticación de navegador basada en refresh cookies `HttpOnly`, protección CSRF, sesión en memoria, rutas protegidas, registro, recuperación de contraseña y verificación de correo. No guarda access tokens en `localStorage` ni incorpora identidades de ejemplo.
+Frontend reutilizable para un SaaS, compatible con los backends que implementen el contrato común del proyecto. Incluye autenticación de navegador basada en refresh cookies `HttpOnly`, protección CSRF, sesión en memoria, rutas protegidas, registro, recuperación de contraseña, verificación de correo, OAuth Google/GitHub y cierre de sesión. No guarda access tokens en `localStorage` ni incorpora identidades de ejemplo.
 
 ## Primer arranque
 
@@ -29,6 +29,7 @@ El proxy selecciona el backend sin acoplar el navegador a su framework. `NEXT_PU
 - `POST /auth/logout` — requiere la cabecera `X-CSRF-Token` tomada de la cookie pública configurada con `NEXT_PUBLIC_CSRF_COOKIE_NAME`.
 - `GET /users/me` — `Authorization: Bearer <accessToken>`.
 - `POST /auth/password/reset/request`, `POST /auth/password/reset/confirm`, `POST /auth/email/verify`, `POST /auth/email/resend`.
+- OAuth: Nest expone `GET /auth/oauth/:provider`; FastAPI inicia en `GET /auth/oauth/:provider/start`. Ambos vuelven a `/auth/oauth/callback`, donde el frontend restaura la sesión. Requiere un backend con `oauth.pkce`, Google y GitHub configurados.
 
 El access token se conserva exclusivamente en memoria durante la pestaña. Al cargar, la aplicación intenta renovar la sesión con la refresh cookie; si falla, redirige al login.
 

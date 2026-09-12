@@ -10,6 +10,7 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resendVerification: () => Promise<void>;
+  completeOAuth: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -18,14 +19,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<User | null>(null);
   const accessToken = useRef<string | null>(null);
+  const sessionAttempt = useRef(0);
 
   const restoreSession = useCallback(async () => {
+    const attempt = ++sessionAttempt.current;
     try {
       const session = await api.refresh();
+      if (attempt !== sessionAttempt.current) return;
       accessToken.current = session.accessToken;
       setUser(session.user);
       setStatus("authenticated");
     } catch {
+      if (attempt !== sessionAttempt.current) return;
       accessToken.current = null;
       setUser(null);
       setStatus("anonymous");
@@ -35,13 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void Promise.resolve().then(restoreSession); }, [restoreSession]);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    const attempt = ++sessionAttempt.current;
     const session = await api.login({ email, password });
+    if (attempt !== sessionAttempt.current) return;
     accessToken.current = session.accessToken;
     setUser(session.user);
     setStatus("authenticated");
   }, []);
 
   const signOut = useCallback(async () => {
+    ++sessionAttempt.current;
     try { await api.logout(); } finally {
       accessToken.current = null;
       setUser(null);
@@ -54,7 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.resendEmailVerification(accessToken.current);
   }, []);
 
-  return <AuthContext.Provider value={{ status, user, signIn, signOut, resendVerification }}>{children}</AuthContext.Provider>;
+  const completeOAuth = useCallback(async () => { await restoreSession(); }, [restoreSession]);
+
+  return <AuthContext.Provider value={{ status, user, signIn, signOut, resendVerification, completeOAuth }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

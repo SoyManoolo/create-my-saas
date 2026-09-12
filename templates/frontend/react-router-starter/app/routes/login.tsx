@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { ApiError } from "../lib/api.client";
 import { useAuth } from "../lib/auth-context";
+import { OAuthButtons } from "../components/oauth-buttons";
 
 export function meta() { return [{ title: "Entrar · SaaS starter" }]; }
 
@@ -25,5 +26,5 @@ export default function Login() {
     } finally { setPending(false); }
   }
 
-  return <main className="auth-page"><section className="auth-card"><Link className="brand" to="/"><span>✦</span> SaaS starter</Link><h1>Bienvenido de nuevo</h1><p>Accede a tu espacio de trabajo.</p><form onSubmit={submit}>{error && <p className="error" role="alert">{error}</p>}<label>Email<input name="email" type="email" autoComplete="email" required /></label><label>Contraseña<input name="password" type="password" autoComplete="current-password" required /></label><button className="button" disabled={pending}>{pending ? "Entrando…" : "Entrar"}</button></form><p className="form-footer"><Link to="/forgot-password">¿Has olvidado la contraseña?</Link><br />¿Aún no tienes cuenta? <Link to="/register">Regístrate</Link></p></section></main>;
+  return <main className="auth-page"><section className="auth-card"><Link className="brand" to="/"><span>✦</span> SaaS starter</Link><h1>Bienvenido de nuevo</h1><p>Accede a tu espacio de trabajo.</p><form onSubmit={submit}>{error && <p className="error" role="alert">{error}</p>}<label>Email<input name="email" type="email" autoComplete="email" required /></label><label>Contraseña<input name="password" type="password" autoComplete="current-password" required /></label><button className="button" disabled={pending}>{pending ? "Entrando…" : "Entrar"}</button></form><OAuthButtons /><p className="form-footer"><Link to="/forgot-password">¿Has olvidado la contraseña?</Link><br />¿Aún no tienes cuenta? <Link to="/register">Regístrate</Link></p></section></main>;
 }

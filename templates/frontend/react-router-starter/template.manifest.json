@@ -16,7 +16,10 @@
     "auth.password-recovery",
     "auth.email-verification",
     "auth.protected-routes",
-    "rendering.ssr"
+    "rendering.ssr",
+    "oauth.pkce",
+    "oauth.google",
+    "oauth.github"
   ],
   "compatibility": {
     "requiresBackendCapabilities": [
@@ -25,7 +28,10 @@
       "auth.email-verification",
       "auth.password-recovery",
       "users.profile",
-      "security.csrf"
+      "security.csrf",
+      "oauth.pkce",
+      "oauth.google",
+      "oauth.github"
     ]
   },
   "environment": {
