@@ -1,5 +1,6 @@
 """Environment based settings; production settings fail closed."""
 from dataclasses import dataclass
+import json
 import os
 from urllib.parse import urlparse
 
@@ -40,6 +41,13 @@ class Settings:
     smtp_password: str | None = os.getenv("SMTP_PASSWORD")
     smtp_from: str | None = os.getenv("SMTP_FROM")
     smtp_use_ssl: bool = _bool("SMTP_USE_SSL")
+    stripe_secret_key: str | None = os.getenv("STRIPE_SECRET_KEY") or None
+    stripe_webhook_secret: str | None = os.getenv("STRIPE_WEBHOOK_SECRET") or None
+    stripe_price_plans: str = os.getenv("STRIPE_PRICE_PLANS", "{}")
+    billing_free_entitlements: str = os.getenv("BILLING_FREE_ENTITLEMENTS", "{}")
+    stripe_portal_configuration_id: str | None = os.getenv("STRIPE_PORTAL_CONFIGURATION_ID") or None
+    stripe_usage_event_name: str | None = os.getenv("STRIPE_USAGE_EVENT_NAME") or None
+    stripe_webhook_tolerance_seconds: int = int(os.getenv("STRIPE_WEBHOOK_TOLERANCE_SECONDS", "300"))
 
     @property
     def cors_origins(self) -> list[str]:
@@ -59,6 +67,19 @@ class Settings:
             raise RuntimeError("DATABASE_URL must use the postgresql+asyncpg driver.")
         if self.rate_limit_requests < 1 or self.rate_limit_window_seconds < 1:
             raise RuntimeError("RATE_LIMIT_REQUESTS and RATE_LIMIT_WINDOW_SECONDS must be positive integers.")
+        if bool(self.stripe_secret_key) != bool(self.stripe_webhook_secret):
+            raise RuntimeError("STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must be configured together.")
+        if self.stripe_webhook_tolerance_seconds < 1:
+            raise RuntimeError("STRIPE_WEBHOOK_TOLERANCE_SECONDS must be positive.")
+        try:
+            stripe_price_plans = json.loads(self.stripe_price_plans)
+            free_entitlements = json.loads(self.billing_free_entitlements)
+        except json.JSONDecodeError as error:
+            raise RuntimeError("STRIPE_PRICE_PLANS and BILLING_FREE_ENTITLEMENTS must be valid JSON.") from error
+        if not isinstance(stripe_price_plans, dict) or not isinstance(free_entitlements, dict):
+            raise RuntimeError("STRIPE_PRICE_PLANS and BILLING_FREE_ENTITLEMENTS must be JSON objects.")
+        if self.stripe_secret_key and not stripe_price_plans:
+            raise RuntimeError("STRIPE_PRICE_PLANS must contain at least one plan when Stripe is configured.")
         if self.trust_proxy_headers and not self.trusted_proxy_ips:
             raise RuntimeError("TRUSTED_PROXY_IPS is required when TRUST_PROXY_HEADERS is enabled.")
         if "*" in self.trusted_proxy_ips:

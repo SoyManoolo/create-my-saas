@@ -101,6 +101,40 @@ class Subscription(Base):
     plan: Mapped[str] = mapped_column(String(60), default="free", nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
     seats: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+class BillingEntitlement(Base):
+    __tablename__ = "billing_entitlements"
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_billing_entitlement_org_key"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    limit_value: Mapped[int | None] = mapped_column(Integer)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    source: Mapped[str] = mapped_column(String(60), default="free", nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+class UsageRecord(Base):
+    __tablename__ = "usage_records"
+    __table_args__ = (UniqueConstraint("organization_id", "idempotency_key", name="uq_usage_record_org_idempotency"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    metric: Mapped[str] = mapped_column(String(100), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    reported_to_provider: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+class BillingWebhookEvent(Base):
+    __tablename__ = "billing_webhook_events"
+    __table_args__ = (UniqueConstraint("provider", "provider_event_id", name="uq_billing_webhook_provider_event"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

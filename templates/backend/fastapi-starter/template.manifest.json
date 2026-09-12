@@ -20,7 +20,7 @@
     "organizations",
     "organizations.rbac",
     "organizations.invitations",
-    "billing.subscription-domain",
+    "billing.stripe",
     "oauth.pkce",
     "oauth.google",
     "oauth.github",

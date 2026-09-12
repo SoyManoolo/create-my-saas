@@ -2,7 +2,7 @@
 
 This template provides a modular SaaS API: password and token authentication, rotating
 refresh sessions, one-use verification/recovery tokens, profiles, organizations with
-RBAC invitations, a provider-agnostic billing domain, and Redis-backed rate limiting.
+RBAC invitations, Stripe Checkout/Portal billing with verified webhooks, entitlements and trusted usage recording, and Redis-backed rate limiting.
 
 ## Run it
 
