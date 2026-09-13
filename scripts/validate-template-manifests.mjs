@@ -8,11 +8,12 @@ const versionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const capabilityPattern = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
 const environmentPattern = /^[A-Z][A-Z0-9_]*$/;
 const allowedTopLevelFields = new Set([
-  '$schema', 'schemaVersion', 'id', 'version', 'kind', 'displayName', 'description', 'runtime', 'capabilities', 'development', 'compatibility', 'environment',
+  '$schema', 'schemaVersion', 'id', 'version', 'kind', 'displayName', 'description', 'runtime', 'capabilities', 'development', 'compatibility', 'features', 'environment',
 ]);
 const allowedRuntimeFields = new Set(['language', 'version', 'packageManager']);
 const allowedDevelopmentFields = new Set(['port', 'baseUrl']);
 const allowedCompatibilityFields = new Set(['requiresBackendCapabilities']);
+const allowedFeatureFields = new Set(['id', 'description', 'capabilities', 'requiresBackendCapabilities']);
 const allowedEnvironmentFields = new Set(['required']);
 const allowedVariableFields = new Set(['name', 'secret', 'description']);
 
@@ -98,6 +99,39 @@ function validateManifest(file, manifest) {
           if (typeof capability !== 'string' || !capabilityPattern.test(capability)) fail(file, 'compatibility capabilities must use dot-separated lowercase identifiers.');
           if (requiredCapabilities.has(capability)) fail(file, `compatibility.requiresBackendCapabilities contains duplicate "${capability}".`);
           requiredCapabilities.add(capability);
+        }
+      }
+    }
+  }
+
+  if (manifest.features !== undefined) {
+    if (manifest.kind !== 'frontend') {
+      fail(file, 'features are only supported by frontend templates.');
+    } else if (!Array.isArray(manifest.features)) {
+      fail(file, 'features must be an array.');
+    } else {
+      const featureIds = new Set();
+      for (const feature of manifest.features) {
+        if (!feature || Array.isArray(feature) || typeof feature !== 'object') {
+          fail(file, 'feature entries must be objects.');
+          continue;
+        }
+        hasOnlyKeys(file, feature, allowedFeatureFields, 'feature');
+        if (typeof feature.id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(feature.id)) fail(file, 'feature ids must use lowercase kebab-case.');
+        if (featureIds.has(feature.id)) fail(file, `features contains duplicate "${feature.id}".`);
+        featureIds.add(feature.id);
+        if (typeof feature.description !== 'string' || !feature.description.trim()) fail(file, 'feature descriptions must be non-empty.');
+        for (const field of ['capabilities', 'requiresBackendCapabilities']) {
+          if (!Array.isArray(feature[field]) || feature[field].length === 0) {
+            fail(file, `feature.${field} must be a non-empty array.`);
+            continue;
+          }
+          const values = new Set();
+          for (const value of feature[field]) {
+            if (typeof value !== 'string' || !capabilityPattern.test(value)) fail(file, `feature.${field} must use dot-separated lowercase identifiers.`);
+            if (values.has(value)) fail(file, `feature.${field} contains duplicate "${value}".`);
+            values.add(value);
+          }
         }
       }
     }

@@ -24,13 +24,15 @@ Actualmente hay seis plantillas:
 | Backend | `fastify` | API TypeScript ligera con PostgreSQL, sesiones, CSRF, recuperación, verificación de email y OAuth de Google/GitHub. No incluye todavía organizaciones ni Stripe Billing. |
 | Frontend | `nextjs` | Dashboard con sesión de navegador, rutas protegidas y flujos de cuenta. |
 | Frontend | `react-router` | Dashboard React con renderizado Framework Mode, rutas protegidas y proxy de API same-origin. |
-| Frontend | `astro` | Sitio rápido de marketing, documentación y blog; también puede activar la zona autenticada al combinarse con un backend completo. |
+| Frontend | `astro` | Sitio rápido de marketing, documentación y blog, con zona autenticada ligera compatible con los tres backends. La facturación por organización es opcional. |
 
 Las capacidades de cada starter están declaradas en su
 `template.manifest.json`. La CLI las compara antes de escribir archivos: los
 dashboards que requieren organizaciones y Stripe Billing necesitan FastAPI o
-NestJS. Fastify puede generarse solo o con Astro, porque cubre el contrato de
-sesión, recuperación, verificación y OAuth que usa su área autenticada.
+NestJS. Fastify puede generarse solo o con Astro ligero, porque cubre el
+contrato de sesión, recuperación, verificación y OAuth de esa área autenticada.
+Para añadir billing a Astro se selecciona explícitamente `--feature billing`;
+la CLI lo limita a FastAPI y NestJS.
 
 ## A dónde pretende llegar
 
@@ -69,6 +71,7 @@ Mientras el paquete no esté publicado, ejecútalo desde este checkout:
 
 ```sh
 node packages/cli/bin/create-my-saas.js my-saas --backend nestjs --frontend nextjs
+node packages/cli/bin/create-my-saas.js my-saas --backend nestjs --frontend astro --feature billing
 ```
 
 También se puede generar una sola capa:
@@ -102,7 +105,8 @@ copia dependencias, entornos virtuales ni artefactos de compilación locales.
 | Dashboard Python con API completa | `--backend fastapi --frontend nextjs` |
 | App React con SSR/Framework Mode y billing | `--backend nestjs --frontend react-router` o `--backend fastapi --frontend react-router` |
 | Landing, blog o documentación sin área privada | `--frontend astro` |
-| Sitio Astro con área privada | `--backend nestjs --frontend astro`, `--backend fastapi --frontend astro` o `--backend fastify --frontend astro` |
+| Sitio Astro con área privada ligera | `--backend nestjs --frontend astro`, `--backend fastapi --frontend astro` o `--backend fastify --frontend astro` |
+| Sitio Astro con organizaciones y Stripe | `--backend nestjs --frontend astro --feature billing` o `--backend fastapi --frontend astro --feature billing` |
 | API ligera con autenticación completa | `--backend fastify` |
 
 Los frontends de sesión usan un proxy same-origin configurado mediante

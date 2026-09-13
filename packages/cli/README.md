@@ -3,6 +3,11 @@
 Generates a project by discovering the individual `template.manifest.json` files
 in the `templates` directory.
 
+Some frontend templates expose optional features. Select one with repeatable
+`--feature <id>` flags; the generator validates the selected backend before
+copying its overlay. For example, Astro's organization-scoped Stripe UI is
+enabled with `--feature billing` and requires FastAPI or NestJS.
+
 From this repository, run:
 
 ```sh

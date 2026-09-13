@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
 
@@ -15,6 +15,7 @@ const excludedDirectoryNames = new Set([
   'build',
   'coverage',
   'dist',
+  '.features',
   'node_modules',
 ]);
 
@@ -43,6 +44,39 @@ function copyTemplate(templatesDirectory, destinationDirectory, kind, template) 
   });
 }
 
+function selectFrontendFeatures(frontend, featureIds) {
+  if (featureIds.length > 0 && !frontend) {
+    throw new Error('Optional features require a frontend template.');
+  }
+
+  const availableFeatures = new Map((frontend?.features ?? []).map((feature) => [feature.id, feature]));
+  const selectedFeatures = [];
+  const selectedIds = new Set();
+
+  for (const featureId of featureIds) {
+    if (selectedIds.has(featureId)) throw new Error(`Feature "${featureId}" was selected more than once.`);
+    const feature = availableFeatures.get(featureId);
+    if (!feature) throw new Error(`Unknown optional feature "${featureId}" for frontend "${frontend.key}".`);
+    selectedIds.add(featureId);
+    selectedFeatures.push(feature);
+  }
+
+  return selectedFeatures;
+}
+
+function copyFrontendFeatures(destinationDirectory, frontend, features) {
+  const frontendDirectory = join(destinationDirectory, 'frontend');
+  for (const feature of features) {
+    const sourceDirectory = join(frontend.sourceDirectory, '.features', feature.id);
+    if (!existsSync(sourceDirectory)) {
+      throw new Error(`Frontend feature source not found: ${sourceDirectory}`);
+    }
+    for (const entry of readdirSync(sourceDirectory, { withFileTypes: true })) {
+      cpSync(join(sourceDirectory, entry.name), join(frontendDirectory, entry.name), { recursive: true, force: true });
+    }
+  }
+}
+
 function configureFrontendApiProxyTarget(destinationDirectory, backend) {
   const envExamplePath = join(destinationDirectory, 'frontend', '.env.example');
   if (!existsSync(envExamplePath)) {
@@ -60,6 +94,17 @@ function configureFrontendApiProxyTarget(destinationDirectory, backend) {
     () => `API_PROXY_TARGET=${backend.development.baseUrl}`,
   );
   writeFileSync(envExamplePath, configuredContents, 'utf8');
+}
+
+function frontendApiPrefixes(frontend, features = []) {
+  const requiredCapabilities = [
+    ...(frontend?.compatibility?.requiresBackendCapabilities ?? []),
+    ...features.flatMap((feature) => feature.requiresBackendCapabilities),
+  ];
+  const prefixes = ['auth', 'users'];
+  if (requiredCapabilities.includes('organizations')) prefixes.push('organizations');
+  if (requiredCapabilities.includes('billing.stripe')) prefixes.push('billing');
+  return prefixes;
 }
 
 function backendDatabaseUrl(backend) {
@@ -292,7 +337,7 @@ Usa \`docker compose ... down -v\` sólo para descartar deliberadamente los dato
 `;
 }
 
-function writeDeployment(destinationDirectory, backend, frontend) {
+function writeDeployment(destinationDirectory, backend, frontend, frontendFeatures) {
   const deploymentDirectory = join(destinationDirectory, 'deployment');
   mkdirSync(deploymentDirectory, { recursive: true });
   writeFileSync(join(deploymentDirectory, 'compose.yaml'), deploymentCompose(backend, frontend), 'utf8');
@@ -302,7 +347,8 @@ function writeDeployment(destinationDirectory, backend, frontend) {
   if (frontend) {
     writeFileSync(join(deploymentDirectory, '.dockerignore'), '.env\ncerts/\n', 'utf8');
     writeFileSync(join(deploymentDirectory, 'gateway.Dockerfile'), 'FROM nginx:1.27.4-alpine-slim\nCOPY nginx.conf /etc/nginx/conf.d/default.conf\n', 'utf8');
-    writeFileSync(join(deploymentDirectory, 'nginx.conf'), `server {
+  const apiPrefixes = frontendApiPrefixes(frontend, frontendFeatures).join('|');
+  writeFileSync(join(deploymentDirectory, 'nginx.conf'), `server {
   listen 80;
   server_name _;
   return 308 https://$host$request_uri;
@@ -321,7 +367,7 @@ server {
     proxy_set_header Host $host;
   }
 
-${backend ? `  location ~ ^/(auth|users|organizations|billing)(/|$) {
+${backend ? `  location ~ ^/(${apiPrefixes})(/|$) {
     proxy_pass http://api:8000;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -343,8 +389,11 @@ ${backend ? `  location ~ ^/(auth|users|organizations|billing)(/|$) {
   }
 }
 
-function assertCompatibleTemplates(backend, frontend) {
-  const requiredCapabilities = frontend.compatibility?.requiresBackendCapabilities ?? [];
+function assertCompatibleTemplates(backend, frontend, features = []) {
+  const requiredCapabilities = [
+    ...(frontend.compatibility?.requiresBackendCapabilities ?? []),
+    ...features.flatMap((feature) => feature.requiresBackendCapabilities),
+  ];
   const backendCapabilities = new Set(backend.capabilities);
   const missingCapabilities = requiredCapabilities.filter((capability) => !backendCapabilities.has(capability));
 
@@ -360,6 +409,7 @@ export function generateProject({
   destination,
   backendId,
   frontendId,
+  featureIds = [],
   templatesDirectory = defaultTemplatesDirectory,
 }) {
   if (!backendId && !frontendId) {
@@ -375,9 +425,14 @@ export function generateProject({
   const catalog = loadCatalog(templatesDirectory);
   const backend = backendId ? findTemplate(catalog, 'backend', backendId) : undefined;
   const frontend = frontendId ? findTemplate(catalog, 'frontend', frontendId) : undefined;
+  const frontendFeatures = selectFrontendFeatures(frontend, featureIds);
+
+  if (!backend && frontendFeatures.some((feature) => feature.requiresBackendCapabilities.length > 0)) {
+    throw new Error('The selected frontend features require a backend template.');
+  }
 
   if (backend && frontend) {
-    assertCompatibleTemplates(backend, frontend);
+    assertCompatibleTemplates(backend, frontend, frontendFeatures);
   }
 
   mkdirSync(outputDirectory, { recursive: true });
@@ -389,13 +444,14 @@ export function generateProject({
 
     if (frontend) {
       copyTemplate(templatesDirectory, outputDirectory, 'frontend', frontend);
+      copyFrontendFeatures(outputDirectory, frontend, frontendFeatures);
     }
 
-    if (backend && frontend && frontend.capabilities.includes('auth.browser-sessions')) {
+    if (backend && frontend && frontend.compatibility?.requiresBackendCapabilities?.length > 0) {
       configureFrontendApiProxyTarget(outputDirectory, backend);
     }
 
-    writeDeployment(outputDirectory, backend, frontend);
+    writeDeployment(outputDirectory, backend, frontend, frontendFeatures);
 
     const selectedTemplates = {};
     if (backend) {
@@ -413,14 +469,17 @@ export function generateProject({
       };
     }
 
+    const metadata = { schemaVersion: 1, templates: selectedTemplates };
+    if (frontendFeatures.length > 0) metadata.features = { frontend: frontendFeatures.map((feature) => feature.id) };
+
     writeFileSync(
       join(outputDirectory, '.create-my-saas.json'),
-      `${JSON.stringify({ schemaVersion: 1, templates: selectedTemplates }, null, 2)}\n`,
+      `${JSON.stringify(metadata, null, 2)}\n`,
       'utf8',
     );
   } catch (error) {
     throw new Error(`Could not generate project at ${outputDirectory}: ${error.message}`, { cause: error });
   }
 
-  return { outputDirectory, backend, frontend };
+  return { outputDirectory, backend, frontend, frontendFeatures };
 }

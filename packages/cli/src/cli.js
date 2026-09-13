@@ -6,11 +6,13 @@ const usage = `Usage: create-my-saas <destination> [options]
 Options:
   --backend <id>     Backend template to generate
   --frontend <id>    Frontend template to generate
+  --feature <id>     Enable an optional frontend feature (repeatable)
   --list             List available templates
   --help, -h         Show this help
 
 Examples:
   create-my-saas my-saas --backend nestjs --frontend nextjs
+  create-my-saas my-saas --backend nestjs --frontend astro --feature billing
   create-my-saas api-only --backend fastapi
 `;
 
@@ -21,12 +23,15 @@ function listTemplates(log, catalog = loadCatalog()) {
     for (const template of catalog[kind]) {
       const capabilities = template.capabilities.join(', ');
       log(`  ${template.key} (${template.version}) - ${capabilities}`);
+      for (const feature of template.features ?? []) {
+        log(`    optional feature: ${feature.id} - ${feature.description}`);
+      }
     }
   }
 }
 
 export function parseArguments(argumentsList) {
-  const options = { backendId: undefined, frontendId: undefined, destination: undefined, list: false, help: false };
+  const options = { backendId: undefined, frontendId: undefined, featureIds: [], destination: undefined, list: false, help: false };
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -41,13 +46,20 @@ export function parseArguments(argumentsList) {
       if (!options.frontendId) {
         throw new Error('Missing value for --frontend.');
       }
+    } else if (argument.startsWith('--feature=')) {
+      const featureId = argument.slice('--feature='.length);
+      if (!featureId) {
+        throw new Error('Missing value for --feature.');
+      }
+      options.featureIds.push(featureId);
     } else
-    if (argument === '--backend' || argument === '--frontend') {
+    if (argument === '--backend' || argument === '--frontend' || argument === '--feature') {
       const value = argumentsList[index + 1];
       if (!value || value.startsWith('--')) {
         throw new Error(`Missing value for ${argument}.`);
       }
-      options[argument === '--backend' ? 'backendId' : 'frontendId'] = value;
+      if (argument === '--feature') options.featureIds.push(value);
+      else options[argument === '--backend' ? 'backendId' : 'frontendId'] = value;
       index += 1;
     } else if (argument === '--list') {
       options.list = true;

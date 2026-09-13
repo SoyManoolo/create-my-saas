@@ -14,14 +14,21 @@ function temporaryDirectory() {
 test('parses template selections and a destination', () => {
   assert.deepEqual(
     parseArguments(['demo', '--backend', 'nestjs', '--frontend', 'nextjs']),
-    { destination: 'demo', backendId: 'nestjs', frontendId: 'nextjs', list: false, help: false },
+    { destination: 'demo', backendId: 'nestjs', frontendId: 'nextjs', featureIds: [], list: false, help: false },
   );
 });
 
 test('parses equals-style template selections', () => {
   assert.deepEqual(
     parseArguments(['demo', '--backend=fastapi', '--frontend=nextjs']),
-    { destination: 'demo', backendId: 'fastapi', frontendId: 'nextjs', list: false, help: false },
+    { destination: 'demo', backendId: 'fastapi', frontendId: 'nextjs', featureIds: [], list: false, help: false },
+  );
+});
+
+test('parses repeatable optional frontend features', () => {
+  assert.deepEqual(
+    parseArguments(['demo', '--frontend=astro', '--feature', 'billing']),
+    { destination: 'demo', backendId: undefined, frontendId: 'astro', featureIds: ['billing'], list: false, help: false },
   );
 });
 
@@ -142,7 +149,7 @@ test('rejects Fastify for a frontend that requires organizations and Stripe Bill
   assert.equal(existsSync(destination), false);
 });
 
-test('generates the authenticated Astro site with Fastify', (t) => {
+test('generates the lightweight authenticated Astro site with Fastify', (t) => {
   const workspace = temporaryDirectory();
   const destination = join(workspace, 'astro-saas');
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
@@ -157,6 +164,63 @@ test('generates the authenticated Astro site with Fastify', (t) => {
   const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
   assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:3002$/m);
   assert.equal(existsSync(join(destination, 'backend', 'src', 'server.ts')), true);
+  assert.equal(existsSync(join(destination, 'frontend', 'src', 'pages', 'billing', 'index.astro')), false);
+  assert.doesNotMatch(readFileSync(join(destination, 'frontend', 'astro.config.mjs'), 'utf8'), /organizations|billing/);
+});
+
+test('rejects Astro billing with Fastify before creating output', (t) => {
+  const workspace = temporaryDirectory();
+  const destination = join(workspace, 'astro-billing-fastify');
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  assert.throws(
+    () => generateProject({
+      destination,
+      backendId: 'fastify',
+      frontendId: 'astro',
+      featureIds: ['billing'],
+      templatesDirectory: defaultTemplatesDirectory,
+    }),
+    /Missing backend capabilities: organizations, billing\.stripe/,
+  );
+  assert.equal(existsSync(destination), false);
+});
+
+test('rejects Astro billing without a backend before creating output', (t) => {
+  const workspace = temporaryDirectory();
+  const destination = join(workspace, 'astro-billing-static');
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  assert.throws(
+    () => generateProject({
+      destination,
+      frontendId: 'astro',
+      featureIds: ['billing'],
+      templatesDirectory: defaultTemplatesDirectory,
+    }),
+    /selected frontend features require a backend template/,
+  );
+  assert.equal(existsSync(destination), false);
+});
+
+test('generates Astro billing with NestJS and records the selected feature', (t) => {
+  const workspace = temporaryDirectory();
+  const destination = join(workspace, 'astro-billing-nest');
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  generateProject({
+    destination,
+    backendId: 'nestjs',
+    frontendId: 'astro',
+    featureIds: ['billing'],
+    templatesDirectory: defaultTemplatesDirectory,
+  });
+
+  assert.equal(existsSync(join(destination, 'frontend', 'src', 'pages', 'billing', 'index.astro')), true);
+  assert.match(readFileSync(join(destination, 'frontend', 'astro.config.mjs'), 'utf8'), /organizations/);
+  assert.match(readFileSync(join(destination, 'frontend', 'astro.config.mjs'), 'utf8'), /billing/);
+  const metadata = JSON.parse(readFileSync(join(destination, '.create-my-saas.json'), 'utf8'));
+  assert.deepEqual(metadata.features, { frontend: ['billing'] });
 });
 
 test('rejects an unknown template without creating output', (t) => {

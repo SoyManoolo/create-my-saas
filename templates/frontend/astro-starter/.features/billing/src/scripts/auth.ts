@@ -102,7 +102,79 @@ async function bindProtectedPage() {
     document.querySelectorAll<HTMLElement>("[data-user-email]").forEach((node) => { node.textContent = session.user.email; });
     document.querySelectorAll<HTMLElement>("[data-verification]").forEach((node) => { node.textContent = session.user.emailVerified ? "Correo verificado" : "Correo pendiente de verificación"; });
     document.querySelector<HTMLElement>("[data-protected-content]")?.removeAttribute("hidden");
+    if (document.querySelector("[data-billing]")) void bindBilling(session.accessToken);
   } catch { window.location.replace(`/login/?next=${encodeURIComponent(location.pathname)}`); }
+}
+
+type Organization = { id: string; name: string; slug: string };
+type BillingPlan = { priceId: string; name: string; entitlements: Record<string, number | null> };
+type BillingConfiguration = { configured: boolean; plans: BillingPlan[] };
+type BillingSubscription = { plan: string; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean };
+type BillingRedirect = { url: string | null; reason?: string };
+
+async function billingRequest<T>(organizationId: string, suffix: "subscription" | "configuration" | "checkout" | "portal", token: string, body?: unknown) {
+  const init: Omit<RequestInit, "body"> & { body?: unknown; token?: string | null } = { method: suffix === "subscription" || suffix === "configuration" ? "GET" : "POST", token, ...(body === undefined ? {} : { body }) };
+  try { return await request<T>(`/organizations/${organizationId}/billing/${suffix}`, init); }
+  catch (cause) {
+    if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+    return request<T>(`/billing/organizations/${organizationId}${suffix === "subscription" ? "" : `/${suffix}`}`, init);
+  }
+}
+
+function billingStatus(message: string, error = false) { setStatus(document.querySelector("[data-billing-status]"), message, error); }
+
+function renderBilling(summary: HTMLElement, plans: HTMLElement, configuration: BillingConfiguration, subscription: BillingSubscription, organizationId: string, token: string) {
+  summary.replaceChildren(); plans.replaceChildren();
+  const current = document.createElement("div"); current.textContent = `Plan actual: ${subscription.plan} · ${subscription.status}${subscription.cancelAtPeriodEnd ? " · cancela al final del periodo" : ""}`;
+  const renewal = document.createElement("div"); renewal.textContent = `Renovación: ${subscription.currentPeriodEnd ? new Intl.DateTimeFormat("es-ES", { dateStyle: "medium" }).format(new Date(subscription.currentPeriodEnd)) : "Sin fecha"}`;
+  const portal = document.createElement("button"); portal.type = "button"; portal.textContent = "Gestionar suscripción"; portal.disabled = !configuration.configured;
+  portal.addEventListener("click", () => void startRedirect("portal", organizationId, token, portal));
+  summary.append(current, renewal, portal); summary.hidden = false;
+  if (!configuration.configured) { billingStatus("Configura Stripe y los planes permitidos en el backend para habilitar Checkout."); return; }
+  for (const plan of configuration.plans) {
+    const card = document.createElement("article"); card.className = "card";
+    const title = document.createElement("h2"); title.textContent = plan.name;
+    const details = document.createElement("p"); details.textContent = Object.entries(plan.entitlements).map(([key, limit]) => `${key}: ${limit === null ? "sin límite" : `${limit} incluidos`}`).join(" · ") || "Sin límites definidos";
+    const checkout = document.createElement("button"); checkout.type = "button"; checkout.textContent = "Elegir este plan";
+    checkout.addEventListener("click", () => void startRedirect("checkout", organizationId, token, checkout, plan.priceId));
+    card.append(title, details, checkout); plans.append(card);
+  }
+}
+
+async function startRedirect(kind: "checkout" | "portal", organizationId: string, token: string, button: HTMLButtonElement, priceId?: string) {
+  button.disabled = true; billingStatus("");
+  try {
+    const result = await billingRequest<BillingRedirect>(organizationId, kind, token, kind === "checkout" ? { priceId, quantity: 1 } : undefined);
+    if (result.url) { window.location.assign(result.url); return; }
+    billingStatus(result.reason ?? "La facturación de Stripe todavía no está configurada.", true);
+  } catch (cause) { billingStatus(cause instanceof Error ? cause.message : "No se ha podido abrir Stripe.", true); }
+  finally { button.disabled = false; }
+}
+
+async function bindBilling(token: string) {
+  const organizationControl = document.querySelector<HTMLElement>("[data-billing-organization]");
+  const select = organizationControl?.querySelector<HTMLSelectElement>("select");
+  const summary = document.querySelector<HTMLElement>("[data-billing-summary]");
+  const plans = document.querySelector<HTMLElement>("[data-billing-plans]");
+  if (!select || !summary || !plans) return;
+  try {
+    const organizations = await request<Organization[]>("/organizations", { token });
+    if (!organizations.length) { billingStatus("Crea o acepta una organización antes de configurar su facturación."); return; }
+    organizations.forEach((organization) => { const option = document.createElement("option"); option.value = organization.id; option.textContent = organization.name; select.append(option); });
+    if (organizations.length > 1 && organizationControl) organizationControl.hidden = false;
+    const load = async () => {
+      billingStatus("Cargando facturación…");
+      try {
+        const [configuration, subscription] = await Promise.all([
+          billingRequest<BillingConfiguration>(select.value, "configuration", token),
+          billingRequest<BillingSubscription>(select.value, "subscription", token),
+        ]);
+        renderBilling(summary, plans, configuration, subscription, select.value, token); billingStatus("");
+      } catch (cause) { billingStatus(cause instanceof Error ? cause.message : "No se ha podido cargar la facturación.", true); }
+    };
+    select.addEventListener("change", () => void load());
+    await load();
+  } catch (cause) { billingStatus(cause instanceof Error ? cause.message : "No se han podido cargar las organizaciones.", true); }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
