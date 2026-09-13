@@ -112,7 +112,7 @@ test('configures the React Router API proxy from the selected backend', (t) => {
   assert.equal(existsSync(join(destination, 'frontend', 'app', 'routes', 'login.tsx')), true);
 });
 
-test('rejects an incomplete backend for browser-session frontends', (t) => {
+test('rejects Fastify for a frontend that requires organizations and Stripe Billing', (t) => {
   const workspace = temporaryDirectory();
   const destination = join(workspace, 'fastify-saas');
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
@@ -124,26 +124,26 @@ test('rejects an incomplete backend for browser-session frontends', (t) => {
       frontendId: 'react-router',
       templatesDirectory: defaultTemplatesDirectory,
     }),
-    /Missing backend capabilities: auth\.email-verification, auth\.password-recovery/,
+    /Missing backend capabilities: organizations, billing\.stripe/,
   );
   assert.equal(existsSync(destination), false);
 });
 
-test('generates the authenticated Astro site with an OAuth-capable backend', (t) => {
+test('generates the authenticated Astro site with Fastify', (t) => {
   const workspace = temporaryDirectory();
   const destination = join(workspace, 'astro-saas');
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
   generateProject({
     destination,
-    backendId: 'nestjs',
+    backendId: 'fastify',
     frontendId: 'astro',
     templatesDirectory: defaultTemplatesDirectory,
   });
 
   const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
-  assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:3001$/m);
-  assert.equal(existsSync(join(destination, 'backend', 'src', 'main.ts')), true);
+  assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:3002$/m);
+  assert.equal(existsSync(join(destination, 'backend', 'src', 'server.ts')), true);
 });
 
 test('rejects an unknown template without creating output', (t) => {

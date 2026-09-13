@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "kind": "backend",
   "displayName": "Fastify starter",
-  "description": "Fastify TypeScript SaaS API with PostgreSQL-backed browser sessions, CSRF protection, and Redis-backed rate limiting.",
+  "description": "Fastify TypeScript SaaS API with PostgreSQL-backed browser sessions, account recovery, email verification, Google and GitHub OAuth, CSRF protection, transactional email, and Redis-backed rate limiting.",
   "runtime": {
     "language": "node",
     "version": ">=20",
@@ -14,11 +14,17 @@
   "capabilities": [
     "auth.password",
     "auth.refresh-sessions",
+    "auth.email-verification",
+    "auth.password-recovery",
     "users.profile",
+    "oauth.pkce",
+    "oauth.google",
+    "oauth.github",
     "database.postgresql",
     "database.migrations",
     "security.csrf",
-    "security.rate-limiting"
+    "security.rate-limiting",
+    "email.transactional"
   ],
   "development": {
     "port": 3002,

@@ -21,15 +21,16 @@ Actualmente hay seis plantillas:
 | --- | --- | --- |
 | Backend | `fastapi` | API Python completa: sesiones de navegador, CSRF, usuarios, organizaciones, RBAC, recuperación/verificación, OAuth y modelos de billing. |
 | Backend | `nestjs` | API TypeScript modular con el mismo contrato funcional que FastAPI. |
-| Backend | `fastify` | API TypeScript ligera con PostgreSQL, sesiones, CSRF y perfil. Aún no incluye recuperación, verificación de email ni OAuth. |
+| Backend | `fastify` | API TypeScript ligera con PostgreSQL, sesiones, CSRF, recuperación, verificación de email y OAuth de Google/GitHub. No incluye todavía organizaciones ni Stripe Billing. |
 | Frontend | `nextjs` | Dashboard con sesión de navegador, rutas protegidas y flujos de cuenta. |
 | Frontend | `react-router` | Dashboard React con renderizado Framework Mode, rutas protegidas y proxy de API same-origin. |
 | Frontend | `astro` | Sitio rápido de marketing, documentación y blog; también puede activar la zona autenticada al combinarse con un backend completo. |
 
 Las capacidades de cada starter están declaradas en su
 `template.manifest.json`. La CLI las compara antes de escribir archivos: los
-frontends autenticados requieren FastAPI o NestJS; Fastify puede generarse solo
-y no se ofrece para dashboards hasta completar las capacidades que faltan.
+dashboards que requieren organizaciones y Stripe Billing necesitan FastAPI o
+NestJS. Fastify puede generarse solo o con Astro, porque cubre el contrato de
+sesión, recuperación, verificación y OAuth que usa su área autenticada.
 
 ## A dónde pretende llegar
 
@@ -84,10 +85,10 @@ copia dependencias, entornos virtuales ni artefactos de compilación locales.
 | --- | --- |
 | Dashboard TypeScript con API completa | `--backend nestjs --frontend nextjs` |
 | Dashboard Python con API completa | `--backend fastapi --frontend nextjs` |
-| App React con SSR/Framework Mode | `--backend nestjs --frontend react-router` o `--backend fastapi --frontend react-router` |
+| App React con SSR/Framework Mode y billing | `--backend nestjs --frontend react-router` o `--backend fastapi --frontend react-router` |
 | Landing, blog o documentación sin área privada | `--frontend astro` |
-| Sitio Astro con área privada | `--backend nestjs --frontend astro` o `--backend fastapi --frontend astro` |
-| API ligera independiente | `--backend fastify` |
+| Sitio Astro con área privada | `--backend nestjs --frontend astro`, `--backend fastapi --frontend astro` o `--backend fastify --frontend astro` |
+| API ligera con autenticación completa | `--backend fastify` |
 
 Los frontends de sesión usan un proxy same-origin configurado mediante
 `API_PROXY_TARGET`. Después de generar un proyecto, copia sus archivos de
