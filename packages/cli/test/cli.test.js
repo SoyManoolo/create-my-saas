@@ -150,6 +150,8 @@ test('generates selected templates and omits local artifacts', (t) => {
   assert.equal(existsSync(join(destination, 'backend', '.venv')), false);
   assert.equal(existsSync(join(destination, 'backend', '__pycache__')), false);
   assert.equal(existsSync(join(destination, 'frontend', 'node_modules')), false);
+  assert.equal(existsSync(join(destination, 'frontend', 'AGENTS.md')), false);
+  assert.equal(existsSync(join(destination, 'frontend', 'CLAUDE.md')), false);
   assert.equal(existsSync(join(destination, 'backend', 'Dockerfile')), true);
   assert.equal(existsSync(join(destination, 'frontend', 'Dockerfile')), true);
   assert.equal(existsSync(join(destination, 'deployment', 'compose.yaml')), true);

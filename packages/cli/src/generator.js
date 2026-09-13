@@ -29,7 +29,7 @@ const excludedDirectoryNames = new Set([
   'node_modules',
 ]);
 
-const excludedFileNames = new Set(['.DS_Store']);
+const excludedFileNames = new Set(['.DS_Store', 'AGENTS.md', 'CLAUDE.md']);
 
 function shouldCopy(source) {
   const entryName = basename(source);
