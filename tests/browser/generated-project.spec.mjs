@@ -116,13 +116,15 @@ async function waitForApi(page, path, action) {
   return responsePromise;
 }
 
+let generatedRoot;
 let generatedProject;
 let api;
 let web;
 
 test.beforeAll(async () => {
   test.setTimeout(15 * 60 * 1_000);
-  generatedProject = await mkdtemp(join(tmpdir(), `create-my-saas-browser-${backend}-${frontend}-`));
+  generatedRoot = await mkdtemp(join(tmpdir(), `create-my-saas-browser-${backend}-${frontend}-`));
+  generatedProject = join(generatedRoot, 'project');
   await run(process.execPath, [
     join(root, 'packages/cli/bin/create-my-saas.js'), generatedProject,
     '--backend', backend, '--frontend', frontend,
@@ -155,7 +157,7 @@ test.afterAll(async () => {
   test.setTimeout(30_000);
   await stop(web);
   await stop(api);
-  if (generatedProject) await rm(generatedProject, { recursive: true, force: true });
+  if (generatedRoot) await rm(generatedRoot, { recursive: true, force: true });
 });
 
 test(`${backend} + ${frontend} exercises the generated UI in Chromium`, async ({ page, context }) => {
