@@ -1,5 +1,15 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
 
 const excludedDirectoryNames = new Set([
@@ -435,23 +445,27 @@ export function generateProject({
     assertCompatibleTemplates(backend, frontend, frontendFeatures);
   }
 
-  mkdirSync(outputDirectory, { recursive: true });
+  const outputParentDirectory = dirname(outputDirectory);
+  let temporaryDirectory;
 
   try {
+    mkdirSync(outputParentDirectory, { recursive: true });
+    temporaryDirectory = mkdtempSync(join(outputParentDirectory, `.${basename(outputDirectory)}-`));
+
     if (backend) {
-      copyTemplate(templatesDirectory, outputDirectory, 'backend', backend);
+      copyTemplate(templatesDirectory, temporaryDirectory, 'backend', backend);
     }
 
     if (frontend) {
-      copyTemplate(templatesDirectory, outputDirectory, 'frontend', frontend);
-      copyFrontendFeatures(outputDirectory, frontend, frontendFeatures);
+      copyTemplate(templatesDirectory, temporaryDirectory, 'frontend', frontend);
+      copyFrontendFeatures(temporaryDirectory, frontend, frontendFeatures);
     }
 
     if (backend && frontend && frontend.compatibility?.requiresBackendCapabilities?.length > 0) {
-      configureFrontendApiProxyTarget(outputDirectory, backend);
+      configureFrontendApiProxyTarget(temporaryDirectory, backend);
     }
 
-    writeDeployment(outputDirectory, backend, frontend, frontendFeatures);
+    writeDeployment(temporaryDirectory, backend, frontend, frontendFeatures);
 
     const selectedTemplates = {};
     if (backend) {
@@ -473,11 +487,21 @@ export function generateProject({
     if (frontendFeatures.length > 0) metadata.features = { frontend: frontendFeatures.map((feature) => feature.id) };
 
     writeFileSync(
-      join(outputDirectory, '.create-my-saas.json'),
+      join(temporaryDirectory, '.create-my-saas.json'),
       `${JSON.stringify(metadata, null, 2)}\n`,
       'utf8',
     );
+
+    if (existsSync(outputDirectory)) {
+      throw new Error(`Destination already exists: ${outputDirectory}`);
+    }
+
+    renameSync(temporaryDirectory, outputDirectory);
+    temporaryDirectory = undefined;
   } catch (error) {
+    if (temporaryDirectory) {
+      rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
     throw new Error(`Could not generate project at ${outputDirectory}: ${error.message}`, { cause: error });
   }
 

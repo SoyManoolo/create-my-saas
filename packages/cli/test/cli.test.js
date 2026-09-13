@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -9,6 +17,86 @@ import { generateProject } from '../src/generator.js';
 
 function temporaryDirectory() {
   return mkdtempSync(join(tmpdir(), 'create-my-saas-'));
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function createTestTemplates(workspace, {
+  backendEnvironment = true,
+  frontendEnvironment = true,
+  frontendFeature = true,
+} = {}) {
+  const templatesDirectory = join(workspace, 'templates');
+  const backendDirectory = join(templatesDirectory, 'backend', 'test-backend');
+  const frontendDirectory = join(templatesDirectory, 'frontend', 'test-frontend');
+  mkdirSync(backendDirectory, { recursive: true });
+  mkdirSync(frontendDirectory, { recursive: true });
+
+  writeJson(join(backendDirectory, 'template.manifest.json'), {
+    schemaVersion: 1,
+    id: 'backend:test-backend',
+    kind: 'backend',
+    version: '1.0.0',
+    displayName: 'Test backend',
+    capabilities: ['auth.password'],
+    development: { baseUrl: 'http://localhost:8000' },
+  });
+  writeFileSync(join(backendDirectory, 'server.js'), 'export {};\n', 'utf8');
+  if (backendEnvironment) {
+    writeFileSync(join(backendDirectory, '.env.example'), 'APP_ENV=development\n', 'utf8');
+  }
+
+  writeJson(join(frontendDirectory, 'template.manifest.json'), {
+    schemaVersion: 1,
+    id: 'frontend:test-frontend',
+    kind: 'frontend',
+    version: '1.0.0',
+    displayName: 'Test frontend',
+    capabilities: [],
+    compatibility: { requiresBackendCapabilities: ['auth.password'] },
+    features: [{
+      id: 'optional',
+      description: 'Optional test feature',
+      capabilities: [],
+      requiresBackendCapabilities: [],
+    }],
+  });
+  writeFileSync(join(frontendDirectory, 'app.js'), 'export {};\n', 'utf8');
+  if (frontendEnvironment) {
+    writeFileSync(join(frontendDirectory, '.env.example'), 'API_PROXY_TARGET=\n', 'utf8');
+  }
+  if (frontendFeature) {
+    const featureDirectory = join(frontendDirectory, '.features', 'optional');
+    mkdirSync(featureDirectory, { recursive: true });
+    writeFileSync(join(featureDirectory, 'optional.js'), 'export {};\n', 'utf8');
+  }
+
+  return templatesDirectory;
+}
+
+function assertFailedGenerationIsClean({ workspace, templatesDirectory, generate, error }) {
+  const outputParent = join(workspace, 'output');
+  const destination = join(outputParent, 'demo');
+  const existingSibling = join(outputParent, '.demo-existing');
+  mkdirSync(existingSibling, { recursive: true });
+  writeFileSync(join(existingSibling, 'keep.txt'), 'keep\n', 'utf8');
+
+  assert.throws(
+    () => generateProject({
+      destination,
+      backendId: 'test-backend',
+      frontendId: 'test-frontend',
+      templatesDirectory,
+      ...generate,
+    }),
+    error,
+  );
+
+  assert.equal(existsSync(destination), false);
+  assert.equal(readFileSync(join(existingSibling, 'keep.txt'), 'utf8'), 'keep\n');
+  assert.deepEqual(readdirSync(outputParent), ['.demo-existing']);
 }
 
 test('parses template selections and a destination', () => {
@@ -85,16 +173,57 @@ test('generates selected templates and omits local artifacts', (t) => {
   assert.deepEqual(metadata.templates.frontend, {
     id: 'frontend:nextjs', version: '0.1.0', source: 'frontend/nextjs-starter',
   });
+  assert.deepEqual(readdirSync(workspace), ['demo']);
 });
 
 test('refuses to overwrite a destination directory', (t) => {
   const workspace = temporaryDirectory();
+  const sentinel = join(workspace, 'keep.txt');
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  writeFileSync(sentinel, 'keep\n', 'utf8');
 
   assert.throws(
     () => generateProject({ destination: workspace, backendId: 'nestjs', templatesDirectory: defaultTemplatesDirectory }),
     /Destination already exists/,
   );
+  assert.equal(readFileSync(sentinel, 'utf8'), 'keep\n');
+});
+
+test('removes its temporary project when backend configuration fails', (t) => {
+  const workspace = temporaryDirectory();
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  const templatesDirectory = createTestTemplates(workspace, { backendEnvironment: false });
+
+  assertFailedGenerationIsClean({
+    workspace,
+    templatesDirectory,
+    error: /Could not generate project.*\.env\.example/,
+  });
+});
+
+test('removes its temporary project when frontend configuration fails', (t) => {
+  const workspace = temporaryDirectory();
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  const templatesDirectory = createTestTemplates(workspace, { frontendEnvironment: false });
+
+  assertFailedGenerationIsClean({
+    workspace,
+    templatesDirectory,
+    error: /Frontend template is missing \.env\.example/,
+  });
+});
+
+test('removes its temporary project when an optional feature copy fails', (t) => {
+  const workspace = temporaryDirectory();
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  const templatesDirectory = createTestTemplates(workspace, { frontendFeature: false });
+
+  assertFailedGenerationIsClean({
+    workspace,
+    templatesDirectory,
+    generate: { featureIds: ['optional'] },
+    error: /Frontend feature source not found/,
+  });
 });
 
 test('generates the Astro frontend without a selected backend', (t) => {
