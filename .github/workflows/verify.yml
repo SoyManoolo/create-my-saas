@@ -75,7 +75,7 @@ jobs:
           test -f "$project/backend/main.py"
 
   generated-project-e2e:
-    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} browser E2E
+    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} HTTP contract E2E
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -128,10 +128,78 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v5
-      - name: Generate, install, boot, and exercise the generated project
+      - name: Generate, install, boot, and exercise the HTTP contract
         run: >-
           node scripts/e2e-generated-projects.mjs
           --backend "${{ matrix.backend }}" --frontend "${{ matrix.frontend }}"
+
+  generated-project-browser-e2e:
+    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} Playwright E2E
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: fastapi
+            frontend: nextjs
+          - backend: nestjs
+            frontend: react-router
+          - backend: fastify
+            frontend: astro
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install the Playwright test runner
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium and its system dependencies
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Exercise the generated project in Chromium
+        run: pnpm run test:e2e:browser
+        env:
+          E2E_BACKEND: ${{ matrix.backend }}
+          E2E_FRONTEND: ${{ matrix.frontend }}
+      - name: Upload Playwright diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.backend }}-${{ matrix.frontend }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
   nestjs:
     name: NestJS starter

@@ -231,7 +231,7 @@ try {
   await waitFor(`${frontendOrigin}/`, web);
   await verifyExternalProvidersAreIsolated();
   await verifyBrowserSessionThroughProxy();
-  console.log(`Generated ${backend} + ${frontend} browser-session E2E passed.`);
+  console.log(`Generated ${backend} + ${frontend} HTTP session contract E2E passed.`);
 } finally {
   await stop(web);
   await stop(api);
