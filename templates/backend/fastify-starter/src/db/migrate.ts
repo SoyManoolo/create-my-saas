@@ -59,7 +59,8 @@ const migration = `
   alter table users alter column password_hash drop not null;
 `;
 
-const sql = postgres(loadConfig().DATABASE_URL);
+const config = loadConfig();
+const sql = postgres(config.DATABASE_URL, { ssl: config.DATABASE_SSL ? 'verify-full' : false });
 
 try {
   await sql.begin(async (transaction) => {

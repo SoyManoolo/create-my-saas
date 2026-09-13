@@ -74,7 +74,7 @@ class InMemorySessions implements SessionRepository {
 }
 
 const config: Config = {
-  APP_ENV: 'test', NODE_ENV: 'test', environment: 'test', PORT: 3002, DATABASE_URL: 'postgresql://unused', FRONTEND_URL: 'http://localhost:3000',
+  APP_ENV: 'test', NODE_ENV: 'test', environment: 'test', PORT: 3002, DATABASE_URL: 'postgresql://unused', DATABASE_SSL: false, FRONTEND_URL: 'http://localhost:3000',
   CORS_ORIGINS: 'http://localhost:3000', SECRET_KEY: 'test-secret-that-is-long-enough-for-validation',
   ACCESS_TOKEN_EXPIRE_MINUTES: 15, REFRESH_TOKEN_EXPIRE_DAYS: 30,
   PASSWORD_RESET_EXPIRE_MINUTES: 60, EMAIL_VERIFICATION_EXPIRE_MINUTES: 1_440,
@@ -93,10 +93,11 @@ const config: Config = {
 test('rate-limit configuration requires TLS Redis in protected environments and explicit proxies', () => {
   const protectedEnvironment = {
     APP_ENV: 'staging', DATABASE_URL: 'postgresql://db.example.test/app', FRONTEND_URL: 'https://app.example.test',
-    CORS_ORIGINS: 'https://app.example.test', SECRET_KEY: 'a'.repeat(32), COOKIE_SECURE: 'true',
+    CORS_ORIGINS: 'https://app.example.test', SECRET_KEY: 'a'.repeat(32), COOKIE_SECURE: 'true', DATABASE_SSL: 'true',
     EMAIL_DELIVERY_URL: 'https://mail.example.test/send', EMAIL_DELIVERY_TOKEN: 'token',
   };
   assert.throws(() => loadConfig(protectedEnvironment), /TLS REDIS_URL/);
+  assert.throws(() => loadConfig({ ...protectedEnvironment, DATABASE_SSL: 'false' }), /DATABASE_SSL/);
   assert.throws(() => loadConfig({ ...protectedEnvironment, REDIS_URL: 'rediss://redis.example.test', TRUST_PROXY_HEADERS: 'true' }), /TRUSTED_PROXY_IPS/);
 });
 

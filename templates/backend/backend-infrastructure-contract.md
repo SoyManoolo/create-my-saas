@@ -8,7 +8,7 @@ exige cambiar los tres starters y sus ejemplos de entorno.
 | --- | --- |
 | Entorno | `APP_ENV` es `development`, `test`, `staging` o `production`. `NODE_ENV` se acepta temporalmente como alias. |
 | PostgreSQL | `DATABASE_URL` debe apuntar a PostgreSQL; FastAPI usa `postgresql+asyncpg://` en ejecución y Alembic traduce sólo para DDL síncrono. Nest usa `postgresql://`. `synchronize` permanece desactivado. |
-| TLS de PostgreSQL | `DATABASE_SSL=true` en staging/production; los dos drivers verifican el certificado. |
+| TLS de PostgreSQL | `DATABASE_SSL=true` en staging/production; los drivers verifican el certificado. |
 | Migraciones | Una base nueva se crea únicamente con las migraciones: `alembic upgrade head` y `pnpm migration:run`. Nunca se depende de `create_all` ni de `synchronize` en despliegue. |
 | Límite distribuido | `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_PREFIX` y `REDIS_URL` son compartidos. En staging/production Redis debe ser `rediss://`; si no está disponible, se responde con 503, no se degrada a memoria local. |
 | Identidad de cliente | Por defecto la IP es la del socket. `TRUST_PROXY_HEADERS=false` evita confiar en `X-Forwarded-*`. Sólo al activar esa opción se aceptan cabeceras de las IPs explícitas de `TRUSTED_PROXY_IPS`; `*` no es válido. El proxy debe eliminar cabeceras de entrada y reconstruirlas. |

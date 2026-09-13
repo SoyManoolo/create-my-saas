@@ -10,6 +10,7 @@ const environment = z.object({
   NODE_ENV: environmentName.optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3002),
   DATABASE_URL: z.string().url(),
+  DATABASE_SSL: environmentBoolean(),
   FRONTEND_URL: z.string().url(),
   CORS_ORIGINS: z.string().min(1),
   SECRET_KEY: z.string().min(32),
@@ -58,6 +59,9 @@ export function loadConfig(input = process.env) {
 
   if (protectedEnvironment && !parsed.COOKIE_SECURE) {
     throw new Error('COOKIE_SECURE must be true in staging and production.');
+  }
+  if (protectedEnvironment && !parsed.DATABASE_SSL) {
+    throw new Error('DATABASE_SSL must be true in staging and production.');
   }
   if (protectedEnvironment && (!parsed.EMAIL_DELIVERY_URL?.startsWith('https://') || !parsed.EMAIL_DELIVERY_TOKEN)) {
     throw new Error('EMAIL_DELIVERY_URL (HTTPS) and EMAIL_DELIVERY_TOKEN are required in staging and production.');

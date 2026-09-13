@@ -55,6 +55,18 @@ test('generates selected templates and omits local artifacts', (t) => {
   assert.equal(existsSync(join(destination, 'backend', '.venv')), false);
   assert.equal(existsSync(join(destination, 'backend', '__pycache__')), false);
   assert.equal(existsSync(join(destination, 'frontend', 'node_modules')), false);
+  assert.equal(existsSync(join(destination, 'backend', 'Dockerfile')), true);
+  assert.equal(existsSync(join(destination, 'frontend', 'Dockerfile')), true);
+  assert.equal(existsSync(join(destination, 'deployment', 'compose.yaml')), true);
+  assert.equal(existsSync(join(destination, 'deployment', 'compose.dev.yaml')), true);
+
+  const deploymentCompose = readFileSync(join(destination, 'deployment', 'compose.yaml'), 'utf8');
+  assert.match(deploymentCompose, /target: migrate/);
+  assert.match(deploymentCompose, /gateway/);
+  const productionEnvironment = readFileSync(join(destination, 'deployment', '.env.production.example'), 'utf8');
+  assert.match(productionEnvironment, /^APP_ENV=production$/m);
+  assert.match(productionEnvironment, /^DATABASE_SSL=true$/m);
+  assert.match(productionEnvironment, /^REDIS_URL=rediss:\/\//m);
 
   const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
   assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:8000$/m);
@@ -93,6 +105,7 @@ test('generates the Astro frontend without a selected backend', (t) => {
   assert.match(frontendEnvironment, /^PUBLIC_SITE_URL=/m);
   assert.match(frontendEnvironment, /^API_PROXY_TARGET=$/m);
   assert.equal(existsSync(join(destination, 'frontend', 'src', 'pages', 'index.astro')), true);
+  assert.equal(existsSync(join(destination, 'deployment', 'gateway.Dockerfile')), true);
 });
 
 test('configures the React Router API proxy from the selected backend', (t) => {

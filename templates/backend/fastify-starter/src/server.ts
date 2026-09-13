@@ -4,7 +4,7 @@ import { loadConfig } from './config.js';
 import { PostgresSessionRepository } from './db/postgres-repository.js';
 
 const config = loadConfig();
-const sql = postgres(config.DATABASE_URL);
+const sql = postgres(config.DATABASE_URL, { ssl: config.DATABASE_SSL ? 'verify-full' : false });
 const app = await createApp({ config, repository: new PostgresSessionRepository(sql) });
 
 try {

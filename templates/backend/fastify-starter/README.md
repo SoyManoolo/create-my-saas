@@ -18,6 +18,8 @@ pnpm dev
 
 The API listens on `http://localhost:3002`; `GET /health` is available without
 authentication. PostgreSQL must be running at `DATABASE_URL` before migrating.
+Set `DATABASE_SSL=true` with a certificate-verifying PostgreSQL endpoint in
+staging and production; the process refuses to start without it.
 
 ## Rate limiting and proxies
 
