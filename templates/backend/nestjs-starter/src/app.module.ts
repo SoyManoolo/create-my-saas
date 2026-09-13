@@ -35,7 +35,7 @@ const hasValue = (value: string | undefined): boolean => Boolean(value?.trim());
           throw new Error('CORS_ORIGINS must contain explicit HTTPS origins in production.');
         }
         if (isProduction && (!environment.EMAIL_DELIVERY_URL?.startsWith('https://') || !environment.EMAIL_DELIVERY_TOKEN)) {
-          throw new Error('EMAIL_DELIVERY_URL (HTTPS) and EMAIL_DELIVERY_TOKEN are required in production.');
+          throw new Error('EMAIL_DELIVERY_URL (HTTPS) and EMAIL_DELIVERY_TOKEN are required in staging and production.');
         }
         if (isProduction && !environmentBoolean(environment.DATABASE_SSL)) {
           throw new Error('DATABASE_SSL must be enabled in production.');

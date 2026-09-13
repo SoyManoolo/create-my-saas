@@ -79,7 +79,7 @@ session for that user.
 
 Email is delivered through the authenticated HTTPS adapter configured by
 `EMAIL_DELIVERY_URL` and `EMAIL_DELIVERY_TOKEN`. Delivery is a no-op locally so
-the starter can run without external services; production requires an HTTPS URL
+the starter can run without external services; staging and production require an HTTPS URL
 and token and fails closed if delivery is unavailable. Connect this endpoint to
 your transactional provider or a small provider-specific adapter that accepts
 `{ to, subject, text }` with a bearer token.

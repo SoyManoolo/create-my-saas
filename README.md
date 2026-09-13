@@ -134,7 +134,7 @@ releases automatizadas forman parte del trabajo pendiente.
 
 - [Contrato de los manifiestos](./docs/template-manifests.md)
 - [Despliegue reproducible](./docs/deployment.md)
-- [Contrato operativo común de FastAPI y NestJS](./templates/backend/backend-infrastructure-contract.md)
+- [Contrato operativo común de FastAPI, NestJS y Fastify](./templates/backend/backend-infrastructure-contract.md)
 - [FastAPI](./templates/backend/fastapi-starter/README.md), [NestJS](./templates/backend/nestjs-starter/README.md) y [Fastify](./templates/backend/fastify-starter/README.md)
 - [Next.js](./templates/frontend/nextjs-starter/README.md), [React Router](./templates/frontend/react-router-starter/README.md) y [Astro](./templates/frontend/astro-starter/README.md)
 

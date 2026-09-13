@@ -35,12 +35,8 @@ class Settings:
     trusted_proxy_ips_raw: str = os.getenv("TRUSTED_PROXY_IPS", "")
     oauth_enabled: bool = _bool("OAUTH_ENABLED")
     oauth_callback_base_url: str = os.getenv("OAUTH_CALLBACK_BASE_URL", "http://localhost:8000")
-    smtp_host: str | None = os.getenv("SMTP_HOST")
-    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
-    smtp_username: str | None = os.getenv("SMTP_USERNAME")
-    smtp_password: str | None = os.getenv("SMTP_PASSWORD")
-    smtp_from: str | None = os.getenv("SMTP_FROM")
-    smtp_use_ssl: bool = _bool("SMTP_USE_SSL")
+    email_delivery_url: str | None = os.getenv("EMAIL_DELIVERY_URL") or None
+    email_delivery_token: str | None = os.getenv("EMAIL_DELIVERY_TOKEN") or None
     stripe_secret_key: str | None = os.getenv("STRIPE_SECRET_KEY") or None
     stripe_webhook_secret: str | None = os.getenv("STRIPE_WEBHOOK_SECRET") or None
     stripe_price_plans: str = os.getenv("STRIPE_PRICE_PLANS", "{}")
@@ -58,8 +54,8 @@ class Settings:
         return [address.strip() for address in self.trusted_proxy_ips_raw.split(",") if address.strip()]
 
     @property
-    def smtp_configured(self) -> bool:
-        return all((self.smtp_host, self.smtp_username, self.smtp_password, self.smtp_from))
+    def email_delivery_configured(self) -> bool:
+        return bool(self.email_delivery_url and self.email_delivery_token)
 
     def validate(self) -> None:
         database_scheme = urlparse(self.database_url).scheme
@@ -94,8 +90,8 @@ class Settings:
             raise RuntimeError("DATABASE_SSL must be enabled in production.")
         if not self.cors_origins or any(urlparse(origin).scheme != "https" for origin in self.cors_origins):
             raise RuntimeError("CORS_ORIGINS must contain explicit HTTPS origins in production.")
-        if not self.smtp_configured:
-            raise RuntimeError("SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM are required in production.")
+        if not self.email_delivery_configured or urlparse(self.email_delivery_url or "").scheme != "https":
+            raise RuntimeError("EMAIL_DELIVERY_URL (HTTPS) and EMAIL_DELIVERY_TOKEN are required in staging and production.")
         if not self.cookie_secure:
             raise RuntimeError("COOKIE_SECURE must be enabled in production.")
         if not self.rate_limit_enabled or not self.redis_url or urlparse(self.redis_url).scheme != "rediss":
@@ -104,9 +100,4 @@ class Settings:
             raise RuntimeError("COOKIE_SAME_SITE must be lax, strict or none.")
         if self.cookie_same_site == "none" and not self.cookie_secure:
             raise RuntimeError("COOKIE_SECURE is required when COOKIE_SAME_SITE is none.")
-        if self.smtp_port not in {465, 587}:
-            raise RuntimeError("SMTP_PORT must be 465 (TLS) or 587 (STARTTLS).")
-        if self.smtp_port == 465 and not self.smtp_use_ssl:
-            raise RuntimeError("SMTP_USE_SSL must be enabled when SMTP_PORT is 465.")
-
 settings = Settings()

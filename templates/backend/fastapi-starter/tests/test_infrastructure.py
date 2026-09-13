@@ -9,6 +9,20 @@ from src.core.config import Settings
 
 
 class InfrastructureContractTests(unittest.TestCase):
+    def protected_settings(self, **overrides):
+        values = {
+            "environment": "staging",
+            "database_url": "postgresql+asyncpg://db.example.test/app",
+            "database_ssl": True,
+            "secret_key": "a" * 32,
+            "cors_origins_raw": "https://app.example.test",
+            "cookie_secure": True,
+            "redis_url": "rediss://redis.example.test",
+            "email_delivery_url": "https://mail.example.test/send",
+            "email_delivery_token": "delivery-token",
+        }
+        return Settings(**(values | overrides))
+
     def test_requires_asyncpg_for_runtime_connections(self):
         with self.assertRaisesRegex(RuntimeError, "postgresql\\+asyncpg"):
             Settings(database_url="postgresql://postgres:postgres@localhost/app").validate()
@@ -19,6 +33,14 @@ class InfrastructureContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "not allowed"):
             Settings(trust_proxy_headers=True, trusted_proxy_ips_raw="*").validate()
+
+    def test_requires_the_authenticated_https_email_adapter_in_protected_environments(self):
+        with self.assertRaisesRegex(RuntimeError, "EMAIL_DELIVERY_URL"):
+            self.protected_settings(email_delivery_url=None, email_delivery_token=None).validate()
+        with self.assertRaisesRegex(RuntimeError, "HTTPS"):
+            self.protected_settings(email_delivery_url="http://mail.example.test/send").validate()
+
+        self.protected_settings().validate()
 
     def test_liveness_does_not_probe_external_dependencies(self):
         with patch("main.readiness_checks", new=AsyncMock(side_effect=AssertionError("must not run"))):

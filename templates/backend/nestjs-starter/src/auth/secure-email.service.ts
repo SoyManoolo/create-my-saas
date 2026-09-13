@@ -16,12 +16,17 @@ export class SecureEmailService {
       }
       return;
     }
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: recipient, subject, text }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new AppError('EMAIL_DELIVERY_UNAVAILABLE', 'Secure email delivery is unavailable.', 503);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: recipient, subject, text }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new AppError('EMAIL_DELIVERY_UNAVAILABLE', 'Secure email delivery is unavailable.', 503);
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'EMAIL_DELIVERY_UNAVAILABLE') throw error;
+      throw new AppError('EMAIL_DELIVERY_UNAVAILABLE', 'Secure email delivery is unavailable.', 503);
+    }
   }
 }

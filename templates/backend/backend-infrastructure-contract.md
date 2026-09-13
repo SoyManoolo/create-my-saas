@@ -14,6 +14,7 @@ exige cambiar los tres starters y sus ejemplos de entorno.
 | Límite distribuido | `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_PREFIX` y `REDIS_URL` son compartidos. En staging/production Redis debe ser `rediss://`; si no está disponible, se responde con 503, no se degrada a memoria local. |
 | Identidad de cliente | Por defecto la IP es la del socket. `TRUST_PROXY_HEADERS=false` evita confiar en `X-Forwarded-*`. Sólo al activar esa opción se aceptan cabeceras de las IPs explícitas de `TRUSTED_PROXY_IPS`; `*` no es válido. El proxy debe eliminar cabeceras de entrada y reconstruirlas. |
 | Resultado del límite | Las peticiones que exceden el límite devuelven `429` y `Retry-After`; cuando el almacén distribuido no está disponible en un entorno protegido devuelven `503` con el código `RATE_LIMIT_UNAVAILABLE`. |
+| Email transaccional | `EMAIL_DELIVERY_URL` y `EMAIL_DELIVERY_TOKEN` configuran un adaptador HTTPS autenticado. Recibe `POST` JSON `{ to, subject, text }` con Bearer, tiene 10 segundos de timeout y convierte respuestas no exitosas o errores de red en `EMAIL_DELIVERY_UNAVAILABLE`. En development/test puede omitirse y no se entrega correo; en staging/production ambos valores son obligatorios y la URL debe ser HTTPS. |
 
 ## Verificación desde una base vacía
 

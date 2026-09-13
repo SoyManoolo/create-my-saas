@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { createApp } from '../src/app.js';
 import { loadConfig, type Config } from '../src/config.js';
-import type { EmailSender } from '../src/email.js';
+import { EmailDeliveryError, SecureEmailSender, type EmailSender } from '../src/email.js';
 import type { OneTimeTokenKind, SessionRepository, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../src/types.js';
 
 class InMemorySessions implements SessionRepository {
@@ -96,9 +96,51 @@ test('rate-limit configuration requires TLS Redis in protected environments and 
     CORS_ORIGINS: 'https://app.example.test', SECRET_KEY: 'a'.repeat(32), COOKIE_SECURE: 'true', DATABASE_SSL: 'true',
     EMAIL_DELIVERY_URL: 'https://mail.example.test/send', EMAIL_DELIVERY_TOKEN: 'token',
   };
+  assert.throws(
+    () => loadConfig({ ...protectedEnvironment, REDIS_URL: 'rediss://redis.example.test', EMAIL_DELIVERY_URL: undefined }),
+    /EMAIL_DELIVERY_URL/,
+  );
   assert.throws(() => loadConfig(protectedEnvironment), /TLS REDIS_URL/);
   assert.throws(() => loadConfig({ ...protectedEnvironment, DATABASE_SSL: 'false' }), /DATABASE_SSL/);
   assert.throws(() => loadConfig({ ...protectedEnvironment, REDIS_URL: 'rediss://redis.example.test', TRUST_PROXY_HEADERS: 'true' }), /TRUSTED_PROXY_IPS/);
+});
+
+test('secure email uses the shared authenticated adapter contract and normalizes failures', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ input: string | URL | Request; init?: RequestInit }> = [];
+  try {
+    globalThis.fetch = (async (input, init) => {
+      requests.push({ input, init });
+      return { ok: true } as Response;
+    }) as typeof fetch;
+    const sender = new SecureEmailSender({
+      ...config,
+      EMAIL_DELIVERY_URL: 'https://mail.example.test/send',
+      EMAIL_DELIVERY_TOKEN: 'delivery-token',
+    });
+
+    await sender.send('person@example.com', 'Verify email', 'Use this one-time token');
+
+    assert.equal(requests[0]?.input, 'https://mail.example.test/send');
+    assert.deepEqual(requests[0]?.init?.headers, { Authorization: 'Bearer delivery-token', 'Content-Type': 'application/json' });
+    assert.deepEqual(JSON.parse(String(requests[0]?.init?.body)), {
+      to: 'person@example.com', subject: 'Verify email', text: 'Use this one-time token',
+    });
+    assert.ok(requests[0]?.init?.signal instanceof AbortSignal);
+
+    globalThis.fetch = (async () => { throw new TypeError('fetch failed'); }) as typeof fetch;
+    await assert.rejects(() => sender.send('person@example.com', 'Subject', 'Text'), EmailDeliveryError);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('secure email suppresses missing configuration only outside protected environments', async () => {
+  await new SecureEmailSender(config).send('person@example.com', 'Subject', 'Text');
+  await assert.rejects(
+    () => new SecureEmailSender({ ...config, environment: 'staging', APP_ENV: 'staging', NODE_ENV: 'staging' }).send('person@example.com', 'Subject', 'Text'),
+    EmailDeliveryError,
+  );
 });
 
 test('liveness stays local while readiness checks required dependencies', async () => {

@@ -1,8 +1,7 @@
-"""Secure SMTP delivery for credentials that must never enter API responses."""
+"""Secure HTTPS delivery for credentials that must never enter API responses."""
 import asyncio
-import smtplib
-import ssl
-from email.message import EmailMessage
+import json
+from urllib import error, request
 
 from src.core.config import settings
 
@@ -12,27 +11,30 @@ class EmailDeliveryError(RuntimeError):
 
 
 async def send_secure_email(*, recipient: str, subject: str, body: str) -> None:
-    """Send over implicit TLS or STARTTLS. Development may intentionally suppress mail."""
-    if not settings.smtp_configured:
+    """Send through the shared authenticated adapter. Development may suppress mail."""
+    if not settings.email_delivery_configured:
         if settings.environment in {"production", "staging"}:
             raise EmailDeliveryError("Secure email delivery is not configured.")
         return
-    message = EmailMessage()
-    message["From"] = settings.smtp_from
-    message["To"] = recipient
-    message["Subject"] = subject
-    message.set_content(body)
 
     def deliver() -> None:
-        client_class = smtplib.SMTP_SSL if settings.smtp_use_ssl else smtplib.SMTP
-        context = ssl.create_default_context()
-        with client_class(settings.smtp_host, settings.smtp_port, timeout=10, context=context) if settings.smtp_use_ssl else client_class(settings.smtp_host, settings.smtp_port, timeout=10) as client:
-            if not settings.smtp_use_ssl:
-                client.starttls(context=context)
-            client.login(settings.smtp_username, settings.smtp_password)
-            client.send_message(message)
+        payload = json.dumps({"to": recipient, "subject": subject, "text": body}).encode("utf-8")
+        email_request = request.Request(
+            settings.email_delivery_url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {settings.email_delivery_token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with request.urlopen(email_request, timeout=10) as response:
+            if not 200 <= response.status < 300:
+                raise EmailDeliveryError("Secure email delivery is unavailable.")
 
     try:
         await asyncio.to_thread(deliver)
-    except (OSError, smtplib.SMTPException) as exc:
-        raise EmailDeliveryError("Unable to deliver secure email.") from exc
+    except EmailDeliveryError:
+        raise
+    except (error.URLError, OSError, TimeoutError, ValueError) as exc:
+        raise EmailDeliveryError("Secure email delivery is unavailable.") from exc
