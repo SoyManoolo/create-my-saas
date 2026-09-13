@@ -5,6 +5,7 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApplication } from './../src/app.setup';
 import { SecureEmailService } from './../src/auth/secure-email.service';
+import { randomUUID } from 'node:crypto';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -199,6 +200,88 @@ describe('AppController (e2e)', () => {
     ]);
   });
 
+  it('transfers organization ownership only to an active member and lets the previous owner leave', async () => {
+    const owner = await registerAndLogin(app, { email: 'org-owner@example.com', password: 'password123', name: 'Owner' });
+    const admin = await registerAndLogin(app, { email: 'org-admin@example.com', password: 'password123', name: 'Admin' });
+    const member = await registerAndLogin(app, { email: 'org-member@example.com', password: 'password123', name: 'Member' });
+    const organization = await request(app.getHttpServer())
+      .post('/organizations')
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ name: 'Ownership E2E' })
+      .expect(201);
+
+    for (const invited of [
+      { account: admin, email: 'org-admin@example.com', role: 'admin' },
+      { account: member, email: 'org-member@example.com', role: 'member' },
+    ] as const) {
+      await request(app.getHttpServer())
+        .post(`/organizations/${organization.body.id}/invitations`)
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .send({ email: invited.email, role: invited.role })
+        .expect(204);
+      const invitation = deliveries.findLast((delivery) =>
+        delivery.recipient === invited.email && delivery.subject === 'Organization invitation');
+      const token = invitation?.text.match(/token: (\S+)/)?.[1];
+      if (!token) throw new Error('Organization invitation token was not delivered');
+      await request(app.getHttpServer())
+        .post('/organizations/invitations/accept')
+        .set('Authorization', `Bearer ${invited.account.accessToken}`)
+        .send({ token })
+        .expect(201);
+    }
+
+    for (const account of [admin, member]) {
+      await request(app.getHttpServer())
+        .post(`/organizations/${organization.body.id}/ownership/transfer`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .send({ userId: member.userId })
+        .expect(403)
+        .expect({ error: { code: 'ORGANIZATION_ACCESS_DENIED', message: 'You do not have permission for this organization.' } });
+    }
+
+    await request(app.getHttpServer())
+      .delete('/users/me')
+      .set('Authorization', `Bearer ${member.accessToken}`)
+      .expect(200);
+    for (const userId of [member.userId, randomUUID()]) {
+      await request(app.getHttpServer())
+        .post(`/organizations/${organization.body.id}/ownership/transfer`)
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .send({ userId })
+        .expect(409)
+        .expect({ error: { code: 'OWNERSHIP_TARGET_NOT_ELIGIBLE', message: 'Ownership can only be transferred to an active organization member.' } });
+    }
+
+    await request(app.getHttpServer())
+      .post(`/organizations/${organization.body.id}/ownership/transfer`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ userId: admin.userId })
+      .expect(204);
+    const transferredMembers = await request(app.getHttpServer())
+      .get(`/organizations/${organization.body.id}/members`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    expect(transferredMembers.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: owner.userId, role: 'admin' }),
+      expect.objectContaining({ userId: admin.userId, role: 'owner' }),
+    ]));
+
+    await request(app.getHttpServer())
+      .delete(`/organizations/${organization.body.id}/members/${owner.userId}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .expect(204);
+    await request(app.getHttpServer())
+      .delete('/users/me')
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .expect(200);
+    const remainingMembers = await request(app.getHttpServer())
+      .get(`/organizations/${organization.body.id}/members`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    expect(remainingMembers.body.some((membership: { userId: string }) => membership.userId === owner.userId)).toBe(false);
+    expect(remainingMembers.body.filter((membership: { role: string }) => membership.role === 'owner')).toHaveLength(1);
+  });
+
   afterEach(async () => {
     await app?.close();
   });
@@ -226,4 +309,13 @@ function tokenFrom(text: string | undefined): string {
 
 function loginPayload(credentials: { email: string; password: string }): { email: string; password: string } {
   return { email: credentials.email, password: credentials.password };
+}
+
+async function registerAndLogin(
+  app: INestApplication<App>,
+  credentials: { email: string; password: string; name: string },
+): Promise<{ userId: string; accessToken: string }> {
+  const registration = await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
+  const login = await request(app.getHttpServer()).post('/auth/login').send(loginPayload(credentials)).expect(200);
+  return { userId: registration.body.id, accessToken: login.body.accessToken };
 }

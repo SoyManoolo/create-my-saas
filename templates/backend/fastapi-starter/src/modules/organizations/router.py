@@ -19,6 +19,7 @@ class OrganizationPublic(BaseModel):
 class MembershipUpdate(BaseModel): role: MembershipRole
 class InviteCreate(BaseModel): email: EmailStr; role: MembershipRole = MembershipRole.MEMBER
 class AcceptInvite(BaseModel): token: str
+class OwnershipTransfer(BaseModel): user_id: UUID
 
 async def membership_for(org_id: UUID, user: User, db: AsyncSession) -> Membership:
     row = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.user_id == user.id))).scalar_one_or_none()
@@ -28,6 +29,11 @@ async def require_role(org_id: UUID, user: User, db: AsyncSession, allowed: set[
     member = await membership_for(org_id, user, db)
     if MembershipRole(member.role) not in allowed: raise AppError("This organization role cannot perform that action.", code="INSUFFICIENT_ROLE", status_code=403)
     return member
+
+async def lock_organization(org_id: UUID, db: AsyncSession) -> Organization:
+    organization = (await db.execute(select(Organization).where(Organization.id == org_id).with_for_update())).scalar_one_or_none()
+    if not organization: raise AppError("Organization membership is required.", code="MEMBERSHIP_REQUIRED", status_code=403)
+    return organization
 
 @router.post("", response_model=OrganizationPublic, status_code=201)
 async def create_org(payload: OrganizationCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -138,16 +144,60 @@ async def accept_invitation(payload: AcceptInvite, user: User = Depends(get_curr
     raise AppError("Invitation is invalid or expired.", code="INVALID_INVITATION", status_code=400)
 @router.patch("/{org_id}/members/{member_id}", status_code=204)
 async def update_member_role(org_id: UUID, member_id: UUID, payload: MembershipUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await lock_organization(org_id, db)
     await require_role(org_id, user, db, {MembershipRole.OWNER, MembershipRole.ADMIN})
-    target = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.id == member_id))).scalar_one_or_none()
+    target = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.id == member_id).with_for_update())).scalar_one_or_none()
     if not target: raise AppError("Membership was not found.", code="MEMBERSHIP_NOT_FOUND", status_code=404)
     if target.role == MembershipRole.OWNER.value or payload.role == MembershipRole.OWNER:
         raise AppError("Owner role cannot be changed through this endpoint.", code="OWNER_ROLE_PROTECTED", status_code=400)
     target.role = payload.role.value; await db.commit(); return None
 @router.delete("/{org_id}/members/{member_id}", status_code=204)
 async def remove_member(org_id: UUID, member_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await lock_organization(org_id, db)
     await require_role(org_id, user, db, {MembershipRole.OWNER, MembershipRole.ADMIN})
-    target = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.id == member_id))).scalar_one_or_none()
+    target = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.id == member_id).with_for_update())).scalar_one_or_none()
     if not target: raise AppError("Membership was not found.", code="MEMBERSHIP_NOT_FOUND", status_code=404)
     if target.role == MembershipRole.OWNER.value: raise AppError("Transfer ownership before removing the owner.", code="OWNER_REQUIRED", status_code=409)
     await db.delete(target); await db.commit(); return None
+
+@router.post("/{org_id}/ownership/transfer", status_code=204)
+async def transfer_ownership(org_id: UUID, payload: OwnershipTransfer, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if payload.user_id == user.id:
+        raise AppError("Ownership must be transferred to another active organization member.", code="OWNERSHIP_TARGET_NOT_ELIGIBLE", status_code=409)
+
+    try:
+        # User locks make transfer safe against either account being deactivated.
+        # The deterministic order prevents reciprocal transfers from deadlocking.
+        user_ids = sorted({user.id, payload.user_id}, key=str)
+        locked_users = (await db.execute(
+            select(User).where(User.id.in_(user_ids)).order_by(User.id).with_for_update()
+        )).scalars().all()
+        users_by_id = {locked_user.id: locked_user for locked_user in locked_users}
+        actor = users_by_id.get(user.id)
+        target_user = users_by_id.get(payload.user_id)
+
+        await lock_organization(org_id, db)
+        memberships = (await db.execute(
+            select(Membership)
+            .where(Membership.organization_id == org_id, Membership.user_id.in_(user_ids))
+            .order_by(Membership.user_id)
+            .with_for_update()
+        )).scalars().all()
+        memberships_by_user = {membership.user_id: membership for membership in memberships}
+        current_owner = memberships_by_user.get(user.id)
+        target = memberships_by_user.get(payload.user_id)
+
+        if not actor or not actor.is_active or not current_owner or current_owner.role != MembershipRole.OWNER.value:
+            raise AppError("Only the current organization owner can transfer ownership.", code="INSUFFICIENT_ROLE", status_code=403)
+        if not target_user or not target_user.is_active or not target:
+            raise AppError("Ownership can only be transferred to an active organization member.", code="OWNERSHIP_TARGET_NOT_ELIGIBLE", status_code=409)
+
+        # Promote before demoting. Both writes remain invisible until this single
+        # transaction commits, so observers never see an ownerless organization.
+        target.role = MembershipRole.OWNER.value
+        current_owner.role = MembershipRole.ADMIN.value
+        await db.commit()
+        return None
+    except Exception:
+        await db.rollback()
+        raise

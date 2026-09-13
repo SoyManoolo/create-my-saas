@@ -1,4 +1,5 @@
 import { AppError } from '../common/errors/app.error';
+import { randomUUID } from 'node:crypto';
 import { SecureEmailService } from '../auth/secure-email.service';
 import { User } from '../users/user.entity';
 import { Invitation } from './invitation.entity';
@@ -81,5 +82,152 @@ describe('OrganizationsService', () => {
 
     expect(memberships.save).not.toHaveBeenCalled();
     expect(invitations.update).not.toHaveBeenCalled();
+  });
+
+  function ownershipSetup(options: { actorRole?: 'owner' | 'admin' | 'member'; targetActive?: boolean; targetIsMember?: boolean } = {}) {
+    const organizationId = randomUUID();
+    const actor = { id: randomUUID(), email: 'owner@example.com', isActive: true } as User;
+    const target = { id: randomUUID(), email: 'target@example.com', isActive: options.targetActive ?? true } as User;
+    const organization = { id: organizationId, name: 'Acme', slug: 'acme' } as Organization;
+    const users = [actor, target];
+    const storedMemberships = [
+      { id: randomUUID(), organizationId, userId: actor.id, role: options.actorRole ?? 'owner' } as Membership,
+      ...(options.targetIsMember === false ? [] : [
+        { id: randomUUID(), organizationId, userId: target.id, role: 'member' } as Membership,
+      ]),
+    ];
+    const lockAliases: string[] = [];
+
+    const usersRepository = {
+      createQueryBuilder: jest.fn((alias: string) => {
+        const builder: any = {};
+        let parameters: Record<string, any> = {};
+        builder.where = jest.fn((_condition: string, values: Record<string, any>) => { parameters = values; return builder; });
+        builder.orderBy = jest.fn(() => builder);
+        builder.setLock = jest.fn(() => { lockAliases.push(alias); return builder; });
+        builder.getMany = jest.fn(async () => users.filter((entry) => (parameters.userIds ?? [parameters.userId]).includes(entry.id)));
+        return builder;
+      }),
+    };
+    const organizationsRepository = {
+      createQueryBuilder: jest.fn((alias: string) => {
+        const builder: any = {};
+        builder.where = jest.fn(() => builder);
+        builder.setLock = jest.fn(() => { lockAliases.push(alias); return builder; });
+        builder.getOne = jest.fn(async () => organization);
+        return builder;
+      }),
+    };
+    const membershipsRepository = {
+      createQueryBuilder: jest.fn((alias: string) => {
+        const builder: any = {};
+        let parameters: Record<string, any> = {};
+        builder.where = jest.fn((_condition: string, values: Record<string, any>) => { parameters = values; return builder; });
+        builder.orderBy = jest.fn(() => builder);
+        builder.setLock = jest.fn(() => { lockAliases.push(alias); return builder; });
+        builder.getMany = jest.fn(async () => storedMemberships.filter((entry) =>
+          entry.organizationId === parameters.organizationId && (parameters.userIds ?? [parameters.userId]).includes(entry.userId)));
+        return builder;
+      }),
+      update: jest.fn(async (criteria: string | { id: string; role: string }, values: Partial<Membership>) => {
+        const membership = storedMemberships.find((entry) =>
+          typeof criteria === 'string' ? entry.id === criteria : entry.id === criteria.id && entry.role === criteria.role);
+        if (membership && values.role) membership.role = values.role;
+        return { affected: membership ? 1 : 0 };
+      }),
+      remove: jest.fn(async (membership: Membership) => {
+        const index = storedMemberships.indexOf(membership);
+        if (index >= 0) storedMemberships.splice(index, 1);
+        return membership;
+      }),
+    };
+    const repositories = new Map<unknown, any>([
+      [User, usersRepository],
+      [Organization, organizationsRepository],
+      [Membership, membershipsRepository],
+    ]);
+    const manager = { getRepository: (entity: unknown) => repositories.get(entity) };
+    let transactionTail = Promise.resolve();
+    const dataSource = {
+      options: { type: 'postgres' },
+      transaction: jest.fn(<T>(callback: (value: typeof manager) => Promise<T>) => {
+        const result = transactionTail.then(() => callback(manager));
+        transactionTail = result.then(() => undefined, () => undefined);
+        return result;
+      }),
+    };
+    const service = new OrganizationsService(
+      organizationsRepository as never,
+      membershipsRepository as never,
+      {} as never,
+      dataSource as never,
+      { send: jest.fn() } as never,
+    );
+    return { service, organizationId, actor, target, users, storedMemberships, lockAliases };
+  }
+
+  it('transfers ownership atomically and lets the previous owner leave', async () => {
+    const state = ownershipSetup();
+
+    await state.service.transferOwnership(state.organizationId, state.actor.id, state.target.id);
+
+    expect(state.storedMemberships.find((membership) => membership.userId === state.target.id)?.role).toBe('owner');
+    expect(state.storedMemberships.find((membership) => membership.userId === state.actor.id)?.role).toBe('admin');
+    expect(state.storedMemberships.filter((membership) => membership.role === 'owner')).toHaveLength(1);
+    expect(state.lockAliases).toEqual(['user', 'organization', 'membership']);
+
+    await state.service.removeMember(state.organizationId, state.actor.id, state.actor.id);
+    expect(state.storedMemberships.some((membership) => membership.userId === state.actor.id)).toBe(false);
+    expect(state.storedMemberships.filter((membership) => membership.role === 'owner')).toHaveLength(1);
+  });
+
+  it.each(['admin', 'member'] as const)('rejects ownership transfer by a %s', async (actorRole) => {
+    const state = ownershipSetup({ actorRole });
+
+    await expect(state.service.transferOwnership(state.organizationId, state.actor.id, state.target.id)).rejects.toMatchObject({
+      code: 'ORGANIZATION_ACCESS_DENIED',
+      statusCode: 403,
+    });
+    expect(state.storedMemberships.find((membership) => membership.userId === state.actor.id)?.role).toBe(actorRole);
+  });
+
+  it('rejects inactive, external and nonexistent ownership targets', async () => {
+    const inactive = ownershipSetup({ targetActive: false });
+    const external = ownershipSetup({ targetIsMember: false });
+    const missing = ownershipSetup();
+
+    for (const [state, targetId] of [
+      [inactive, inactive.target.id],
+      [external, external.target.id],
+      [missing, randomUUID()],
+      [missing, missing.actor.id],
+    ] as const) {
+      await expect(state.service.transferOwnership(state.organizationId, state.actor.id, targetId)).rejects.toMatchObject({
+        code: 'OWNERSHIP_TARGET_NOT_ELIGIBLE',
+        statusCode: 409,
+      });
+      expect(state.storedMemberships.filter((membership) => membership.role === 'owner')).toHaveLength(1);
+    }
+  });
+
+  it('serializes concurrent transfers so exactly one destination becomes owner', async () => {
+    const state = ownershipSetup();
+    const secondTarget = { id: randomUUID(), email: 'second@example.com', isActive: true } as User;
+    state.users.push(secondTarget);
+    state.storedMemberships.push({
+      id: randomUUID(),
+      organizationId: state.organizationId,
+      userId: secondTarget.id,
+      role: 'member',
+    } as Membership);
+
+    const results = await Promise.allSettled([
+      state.service.transferOwnership(state.organizationId, state.actor.id, state.target.id),
+      state.service.transferOwnership(state.organizationId, state.actor.id, secondTarget.id),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(state.storedMemberships.filter((membership) => membership.role === 'owner')).toHaveLength(1);
   });
 });

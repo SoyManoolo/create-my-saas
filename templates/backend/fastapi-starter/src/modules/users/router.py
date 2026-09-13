@@ -8,7 +8,7 @@ from src.modules.auth.dependencies import get_user_repository
 from src.modules.auth.security.password import hash_password, verify_password
 from src.modules.auth.security.tokens import get_current_user, utc_now
 from src.modules.auth.service import AuthService
-from src.modules.users.model import Membership, MembershipRole, RefreshToken, TokenPurpose, User
+from src.modules.users.model import Membership, MembershipRole, Organization, RefreshToken, TokenPurpose, User
 from src.modules.users.repository import UserRepository
 from src.modules.users.schemas import ChangePassword, ResetPasswordConfirm, ResetPasswordRequest, TokenRequest, UserPublic, UserUpdate
 
@@ -26,23 +26,31 @@ async def change_password(payload: ChangePassword, current_user: User = Depends(
     return Response(status_code=204)
 @router.post("/me/deactivate", status_code=204)
 async def deactivate_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db), users: UserRepository = Depends(get_user_repository)):
-    # Lock each affected organization's owner memberships before counting them. This
-    # serializes two owners trying to deactivate concurrently.
+    # Ownership transfers take the same user-then-organization lock order. A user
+    # therefore cannot become the sole owner while this deactivation is in flight.
+    locked_user = (await db.execute(select(User).where(User.id == current_user.id).with_for_update())).scalar_one_or_none()
+    if not locked_user or not locked_user.is_active:
+        raise AppError("The user account is inactive.", code="USER_INACTIVE", status_code=403)
     owned_orgs = (await db.execute(
         select(Membership.organization_id)
         .where(Membership.user_id == current_user.id, Membership.role == MembershipRole.OWNER.value)
-        .with_for_update()
     )).scalars().all()
+    if owned_orgs:
+        await db.execute(
+            select(Organization.id)
+            .where(Organization.id.in_(sorted(owned_orgs, key=str)))
+            .order_by(Organization.id)
+            .with_for_update()
+        )
     for organization_id in owned_orgs:
         active_owners = (await db.execute(
             select(Membership.id)
             .join(User, Membership.user_id == User.id)
             .where(Membership.organization_id == organization_id, Membership.role == MembershipRole.OWNER.value, User.is_active.is_(True))
-            .with_for_update()
         )).scalars().all()
         if len(active_owners) <= 1:
             raise AppError("Transfer ownership to another active user before deactivating this account.", code="LAST_ACTIVE_OWNER", status_code=409)
-    current_user.is_active = False
+    locked_user.is_active = False
     await db.execute(update(RefreshToken).where(RefreshToken.user_id == current_user.id, RefreshToken.revoked_at.is_(None)).values(revoked_at=utc_now()))
     await db.commit()
     return Response(status_code=204)
