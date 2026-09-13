@@ -1,12 +1,89 @@
 type User = { id: string; name: string; email: string; emailVerified: boolean };
 type Session = { accessToken: string; user: User };
 
-const baseUrl = (import.meta.env.PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
-const csrfCookieName = import.meta.env.PUBLIC_CSRF_COOKIE_NAME ?? "csrf_token";
+const baseUrl = (import.meta.env?.PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+const csrfCookieName = import.meta.env?.PUBLIC_CSRF_COOKIE_NAME ?? "csrf_token";
 let accessToken: string | null = null;
 
 class ApiError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export const API_ERROR_MESSAGES: Record<string, string> = {
+  EMAIL_ALREADY_EXISTS: "Ya existe una cuenta con este correo electrónico.",
+  INVALID_CREDENTIALS: "El correo o la contraseña no son correctos.",
+  USER_INACTIVE: "Esta cuenta está desactivada.",
+  MISSING_TOKEN: "Tu sesión no es válida o ha caducado. Inicia sesión de nuevo.",
+  INVALID_ACCESS_TOKEN: "Tu sesión no es válida o ha caducado. Inicia sesión de nuevo.",
+  EXPIRED_TOKEN: "Tu sesión no es válida o ha caducado. Inicia sesión de nuevo.",
+  INVALID_REFRESH_TOKEN: "Tu sesión no es válida o ha caducado. Inicia sesión de nuevo.",
+  REFRESH_TOKEN_REUSED: "Por seguridad, hemos cerrado tus sesiones. Inicia sesión de nuevo.",
+  INVALID_CSRF_TOKEN: "No se ha podido verificar la solicitud. Recarga la página e inténtalo de nuevo.",
+  INVALID_RESET_TOKEN: "El enlace de restablecimiento no es válido o ha caducado.",
+  INVALID_VERIFICATION_TOKEN: "El enlace de verificación no es válido o ha caducado.",
+  INVALID_TOKEN: "El enlace no es válido, ha caducado o ya se ha utilizado.",
+  EMAIL_DELIVERY_UNAVAILABLE: "No hemos podido enviar el correo. Inténtalo de nuevo más tarde.",
+  OAUTH_PROVIDER_UNAVAILABLE: "Este proveedor de inicio de sesión no está disponible.",
+  OAUTH_CALLBACK_INVALID: "La respuesta del proveedor de inicio de sesión no es válida.",
+  OAUTH_STATE_INVALID: "El intento de inicio de sesión ha caducado. Vuelve a intentarlo.",
+  OAUTH_EMAIL_UNVERIFIED: "El proveedor no ha confirmado tu correo electrónico.",
+  OAUTH_PROVIDER_ERROR: "No se ha podido completar el inicio de sesión con este proveedor.",
+  VALIDATION_ERROR: "Revisa los datos introducidos e inténtalo de nuevo.",
+  HTTP_400: "Revisa los datos introducidos e inténtalo de nuevo.",
+  HTTP_422: "Revisa los datos introducidos e inténtalo de nuevo.",
+  RATE_LIMITED: "Has realizado demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+  RATE_LIMIT_UNAVAILABLE: "El servicio no está disponible temporalmente. Inténtalo de nuevo más tarde.",
+  SERVICE_NOT_READY: "El servicio no está disponible temporalmente. Inténtalo de nuevo más tarde.",
+  INTERNAL_ERROR: "Ha ocurrido un error inesperado. Inténtalo de nuevo más tarde.",
+  INTERNAL_SERVER_ERROR: "Ha ocurrido un error inesperado. Inténtalo de nuevo más tarde.",
+  MEMBERSHIP_REQUIRED: "Necesitas pertenecer a esta organización para continuar.",
+  ORGANIZATION_ACCESS_DENIED: "No tienes permiso para realizar esta acción en la organización.",
+  INSUFFICIENT_ROLE: "No tienes permiso para realizar esta acción en la organización.",
+  ORGANIZATION_NOT_FOUND: "No se ha encontrado la organización.",
+  MEMBERSHIP_NOT_FOUND: "No se ha encontrado al miembro de la organización.",
+  INVALID_ORGANIZATION_SLUG: "El identificador de la organización debe contener letras o números.",
+  SLUG_ALREADY_EXISTS: "Ese identificador de organización ya está en uso.",
+  ORGANIZATION_SLUG_ALREADY_EXISTS: "Ese identificador de organización ya está en uso.",
+  INVALID_INVITATION_EMAIL: "Introduce un correo electrónico válido para la invitación.",
+  INVALID_INVITATION: "La invitación no es válida o ha caducado.",
+  OWNER_ROLE_PROTECTED: "Transfiere la propiedad antes de cambiar o eliminar al propietario.",
+  OWNER_REQUIRED: "Transfiere la propiedad antes de eliminar al propietario.",
+  OWNERSHIP_TARGET_NOT_ELIGIBLE: "La propiedad solo puede transferirse a otro miembro activo.",
+  LAST_ACTIVE_OWNER: "Transfiere la propiedad antes de desactivar esta cuenta.",
+  BILLING_NOT_CONFIGURED: "La facturación todavía no está configurada.",
+  BILLING_PRICE_NOT_AVAILABLE: "El plan seleccionado ya no está disponible.",
+  BILLING_CUSTOMER_NOT_FOUND: "Contrata primero un plan para acceder al portal de facturación.",
+  BILLING_PROVIDER_ERROR: "No se ha podido conectar con el proveedor de pagos. Inténtalo de nuevo más tarde.",
+  ENTITLEMENT_REQUIRED: "Tu plan no incluye esta función.",
+  ENTITLEMENT_LIMIT_REACHED: "Has alcanzado el límite de uso de tu plan.",
+  INVALID_USAGE_RECORD: "Los datos de uso no son válidos.",
+  INVALID_ENTITLEMENT_QUANTITY: "La cantidad solicitada no es válida.",
+  INVALID_WEBHOOK_SIGNATURE: "No se ha podido verificar la notificación de pago.",
+  INVALID_BILLING_WEBHOOK: "La notificación de pago no es válida.",
+  BILLING_ORGANIZATION_MISMATCH: "Los datos de facturación no corresponden a esta organización.",
+  BILLING_SUBSCRIPTION_MISMATCH: "La organización ya tiene otra suscripción asociada.",
+  BILLING_CUSTOMER_MISMATCH: "La organización ya tiene otro cliente de facturación asociado.",
+  INVALID_BILLING_CONFIGURATION: "La facturación no está disponible temporalmente.",
+};
+
+export function apiErrorMessage(code: string | undefined, status: number): string {
+  if (code && API_ERROR_MESSAGES[code]) return API_ERROR_MESSAGES[code];
+  if (status === 400 || status === 422) return "Revisa los datos introducidos e inténtalo de nuevo.";
+  if (status === 401) return "Tu sesión no es válida o ha caducado. Inicia sesión de nuevo.";
+  if (status === 403) return "No tienes permiso para realizar esta acción.";
+  if (status === 404) return "No hemos encontrado el recurso solicitado.";
+  if (status === 409) return "No se ha podido completar la operación porque los datos han cambiado.";
+  if (status === 429) return API_ERROR_MESSAGES.RATE_LIMITED;
+  if (status >= 500) return "El servicio no está disponible temporalmente. Inténtalo de nuevo más tarde.";
+  return "La operación no se ha podido completar.";
 }
 
 function cookie(name: string) {
@@ -26,12 +103,13 @@ async function request<T>(path: string, init: Omit<RequestInit, "body"> & { body
   if (csrf && !["GET", "HEAD", "OPTIONS"].includes(options.method ?? "GET")) requestHeaders.set("x-csrf-token", csrf);
   let response: Response;
   try { response = await fetch(`${baseUrl}${path}`, { ...options, headers: requestHeaders, body: body === undefined ? undefined : JSON.stringify(body), credentials: "include" }); }
-  catch { throw new ApiError("No se ha podido contactar con la API.", 0); }
+  catch { throw new ApiError("No se ha podido conectar con el servicio. Comprueba tu conexión e inténtalo de nuevo.", 0, "NETWORK_ERROR"); }
   if (response.status === 204) return undefined as T;
   const result = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
     const error = result.error as Record<string, unknown> | undefined;
-    throw new ApiError(String(error?.message ?? result.message ?? "La operación no se ha podido completar."), response.status);
+    const code = typeof error?.code === "string" ? error.code : undefined;
+    throw new ApiError(apiErrorMessage(code, response.status), response.status, code);
   }
   return result as T;
 }
@@ -105,7 +183,7 @@ async function bindProtectedPage() {
   } catch { window.location.replace(`/login/?next=${encodeURIComponent(location.pathname)}`); }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", () => {
   bindForms(); bindOAuth(); void bindProtectedPage();
   document.querySelectorAll<HTMLElement>("[data-mobile-menu-button]").forEach((button) => button.addEventListener("click", () => document.querySelector("[data-mobile-menu]")?.classList.toggle("open")));
   document.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((button) => button.addEventListener("click", async () => { try { await request("/auth/logout", { method: "POST" }); } finally { accessToken = null; window.location.assign("/login/"); } }));

@@ -228,6 +228,13 @@ test(`${backend} + ${frontend} exercises the generated UI in Chromium`, async ({
   await test.step('login redirects and the session survives a full reload', async () => {
     await page.goto(paths.login);
     await page.locator('input[name="email"]').fill(credentials.email);
+    await page.locator('input[name="password"]').fill('not-the-right-password');
+    const rejectedLogin = await waitForApi(page, '/auth/login', () => page.getByRole('button', { name: /Iniciar sesión|Entrar/i }).click());
+    expect(rejectedLogin.status()).toBe(401);
+    const loginStatus = frontend === 'astro' ? page.locator('[data-form-status]') : page.getByRole('alert');
+    await expect(loginStatus).toHaveText('El correo o la contraseña no son correctos.');
+    await expect(loginStatus).not.toContainText('incorrect');
+
     await page.locator('input[name="password"]').fill(credentials.password);
     const login = await waitForApi(page, '/auth/login', () => page.getByRole('button', { name: /Iniciar sesión|Entrar/i }).click());
     expect(login.status()).toBe(200);
