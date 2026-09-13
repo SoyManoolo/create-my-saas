@@ -32,7 +32,12 @@
   "scripts": {
     "test": "node --test packages/cli/test/*.test.js",
     "test:cli": "node --test packages/cli/test/*.test.js",
+    "test:e2e:browser": "playwright test",
+    "test:e2e:contract": "node scripts/e2e-generated-projects.mjs --backend fastapi --frontend nextjs",
     "test:e2e:generated": "node scripts/e2e-generated-projects.mjs --backend fastapi --frontend nextjs",
     "validate:templates": "node scripts/validate-template-manifests.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
   }
 }
