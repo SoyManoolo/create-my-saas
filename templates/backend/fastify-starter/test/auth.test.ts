@@ -101,8 +101,73 @@ test('rate-limit configuration requires TLS Redis in protected environments and 
   assert.throws(() => loadConfig({ ...protectedEnvironment, REDIS_URL: 'rediss://redis.example.test', TRUST_PROXY_HEADERS: 'true' }), /TRUSTED_PROXY_IPS/);
 });
 
+test('liveness stays local while readiness checks required dependencies', async () => {
+  let databaseProbes = 0;
+  const app = await createApp({
+    config: { ...config, RATE_LIMIT_ENABLED: false },
+    repository: new InMemorySessions(),
+    databaseReady: async () => { databaseProbes += 1; },
+  });
+  try {
+    const liveness = await app.inject({ method: 'GET', url: '/health' });
+    assert.equal(liveness.statusCode, 200);
+    assert.deepEqual(liveness.json(), { status: 'ok' });
+    assert.equal(databaseProbes, 0);
+
+    const readiness = await app.inject({ method: 'GET', url: '/ready' });
+    assert.equal(readiness.statusCode, 200);
+    assert.deepEqual(readiness.json(), { status: 'ready', checks: { database: 'ok', redis: 'disabled' } });
+    assert.equal(databaseProbes, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+test('readiness returns structured 503 responses for PostgreSQL and Redis failures', async () => {
+  const databaseUnavailable = await createApp({
+    config: { ...config, RATE_LIMIT_ENABLED: false },
+    repository: new InMemorySessions(),
+    databaseReady: async () => { throw new Error('database down'); },
+  });
+  try {
+    const response = await databaseUnavailable.inject({ method: 'GET', url: '/ready' });
+    assert.equal(response.statusCode, 503);
+    assert.deepEqual(response.json(), {
+      status: 'not_ready',
+      checks: { database: 'unavailable', redis: 'disabled' },
+      error: {
+        code: 'SERVICE_NOT_READY',
+        message: 'One or more required dependencies are unavailable.',
+      },
+    });
+  } finally {
+    await databaseUnavailable.close();
+  }
+
+  const redisUnavailable = await createApp({
+    config,
+    repository: new InMemorySessions(),
+    databaseReady: async () => {},
+    redisReady: async () => false,
+  });
+  try {
+    const response = await redisUnavailable.inject({ method: 'GET', url: '/ready' });
+    assert.equal(response.statusCode, 503);
+    assert.deepEqual(response.json(), {
+      status: 'not_ready',
+      checks: { database: 'ok', redis: 'unavailable' },
+      error: {
+        code: 'SERVICE_NOT_READY',
+        message: 'One or more required dependencies are unavailable.',
+      },
+    });
+  } finally {
+    await redisUnavailable.close();
+  }
+});
+
 test('rate limiting returns 429 with Retry-After and fails closed in protected environments', async () => {
-  const app = await createApp({ config: { ...config, RATE_LIMIT_REQUESTS: 1 }, repository: new InMemorySessions() });
+  const app = await createApp({ config: { ...config, RATE_LIMIT_REQUESTS: 1 }, repository: new InMemorySessions(), databaseReady: async () => {} });
   try {
     const first = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'first@example.com', name: 'First', password: 'password1' } });
     const limited = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'second@example.com', name: 'Second', password: 'password1' } });
@@ -114,7 +179,7 @@ test('rate limiting returns 429 with Retry-After and fails closed in protected e
     await app.close();
   }
 
-  const protectedApp = await createApp({ config: { ...config, environment: 'staging' }, repository: new InMemorySessions() });
+  const protectedApp = await createApp({ config: { ...config, environment: 'staging' }, repository: new InMemorySessions(), databaseReady: async () => {} });
   try {
     const unavailable = await protectedApp.inject({ method: 'POST', url: '/auth/register', payload: { email: 'unavailable@example.com', name: 'Unavailable', password: 'password1' } });
     assert.equal(unavailable.statusCode, 503);
@@ -151,7 +216,7 @@ function setCookies(response: { headers: Record<string, unknown> }): string {
 }
 
 test('browser session contract returns an in-memory access token but never a refresh token', async () => {
-  const app = await createApp({ config, repository: new InMemorySessions() });
+  const app = await createApp({ config, repository: new InMemorySessions(), databaseReady: async () => {} });
   try {
     const registration = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'person@example.com', name: 'Person', password: 'password1' } });
     assert.equal(registration.statusCode, 201);
@@ -189,7 +254,7 @@ test('browser session contract returns an in-memory access token but never a ref
 test('password recovery and email verification use opaque, single-use tokens', async () => {
   const repository = new InMemorySessions();
   const emailSender = new CapturingEmailSender();
-  const app = await createApp({ config, repository, emailSender });
+  const app = await createApp({ config, repository, databaseReady: async () => {}, emailSender });
   try {
     const registration = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'person@example.com', name: 'Person', password: 'password1' } });
     assert.equal(registration.statusCode, 201);
@@ -230,7 +295,7 @@ test('OAuth publishes configured providers and protects PKCE state from reuse', 
     OAUTH_GOOGLE_CLIENT_SECRET: 'google-secret',
     OAUTH_GOOGLE_REDIRECT_URI: 'http://localhost:3002/auth/oauth/google/callback',
   };
-  const app = await createApp({ config: oauthConfig, repository });
+  const app = await createApp({ config: oauthConfig, repository, databaseReady: async () => {} });
   try {
     const providers = await app.inject({ method: 'GET', url: '/auth/oauth/providers' });
     assert.deepEqual(providers.json(), [{ provider: 'google', configured: true }, { provider: 'github', configured: false }]);

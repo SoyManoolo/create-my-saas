@@ -5,7 +5,13 @@ import { PostgresSessionRepository } from './db/postgres-repository.js';
 
 const config = loadConfig();
 const sql = postgres(config.DATABASE_URL, { ssl: config.DATABASE_SSL ? 'verify-full' : false });
-const app = await createApp({ config, repository: new PostgresSessionRepository(sql) });
+const app = await createApp({
+  config,
+  repository: new PostgresSessionRepository(sql),
+  databaseReady: async () => {
+    await sql`select 1`;
+  },
+});
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.PORT });

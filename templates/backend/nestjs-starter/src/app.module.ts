@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { BillingModule } from './billing/billing.module';
+import { ReadinessService } from './common/readiness/readiness.service';
 
 const environmentBoolean = (value: string | undefined): boolean => ['1', 'true', 'yes', 'on'].includes(value?.trim().toLowerCase() ?? '');
 const hasValue = (value: string | undefined): boolean => Boolean(value?.trim());
@@ -101,7 +102,7 @@ const hasValue = (value: string | undefined): boolean => Boolean(value?.trim());
     BillingModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ReadinessService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

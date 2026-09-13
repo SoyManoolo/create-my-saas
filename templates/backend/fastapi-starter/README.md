@@ -26,6 +26,9 @@ See [`../backend-infrastructure-contract.md`](../backend-infrastructure-contract
 the settings and operational behavior shared with the Nest starter. FastAPI connects to
 PostgreSQL through `postgresql+asyncpg://`; migrations intentionally use the synchronous
 `postgresql+psycopg://` driver because Alembic executes schema DDL synchronously.
+`GET /health` is a dependency-free liveness probe. `GET /ready` checks
+PostgreSQL and, when rate limiting is enabled, Redis; failed or timed-out
+dependencies return a structured `503 SERVICE_NOT_READY` response.
 
 `TRUST_PROXY_HEADERS` is off by default. Enable it only with explicit
 `TRUSTED_PROXY_IPS`; then Uvicorn accepts `X-Forwarded-For` and

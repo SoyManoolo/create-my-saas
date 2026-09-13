@@ -42,7 +42,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.redis = redis_from_url(settings.redis_url, decode_responses=True) if settings.redis_url and redis_from_url else None
 
     async def dispatch(self, request: Request, call_next):
-        if not settings.rate_limit_enabled or request.url.path in {"/health", "/docs", "/openapi.json"}:
+        if not settings.rate_limit_enabled or request.url.path in {"/health", "/ready", "/docs", "/openapi.json"}:
             return await call_next(request)
         # ProxyHeadersMiddleware rewrites client only when its immediate peer is
         # listed in TRUSTED_PROXY_IPS. Otherwise this remains the socket address.

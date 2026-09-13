@@ -25,6 +25,46 @@ export class RateLimitService {
     return bucket.hits <= max;
   }
 
+  async isRedisAvailable(timeoutMs = 500): Promise<boolean> {
+    const url = this.config.get<string>('REDIS_URL');
+    if (!url) return false;
+    try {
+      const target = new URL(url);
+      if (!['redis:', 'rediss:'].includes(target.protocol)) return false;
+      const command = (parts: string[]): string => `*${parts.length}\r\n${parts.map((part) => `$${Buffer.byteLength(part)}\r\n${part}\r\n`).join('')}`;
+      return await new Promise<boolean>((resolve) => {
+        const socket = target.protocol === 'rediss:'
+          ? connectTls({ host: target.hostname, port: Number(target.port || 6380), servername: target.hostname })
+          : createConnection({ host: target.hostname, port: Number(target.port || 6379) });
+        let settled = false;
+        const finish = (available: boolean) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          socket.removeAllListeners();
+          socket.destroy();
+          resolve(available);
+        };
+        const timer = setTimeout(() => finish(false), timeoutMs);
+        socket.once('error', () => finish(false));
+        socket.once(target.protocol === 'rediss:' ? 'secureConnect' : 'connect', () => {
+          let received = '';
+          socket.on('data', (chunk: Buffer) => {
+            received += chunk.toString();
+            if (received.split('\r\n').some((line) => line.startsWith('-'))) return finish(false);
+            if (received.includes('+PONG\r\n')) finish(true);
+          });
+          const password = decodeURIComponent(target.password);
+          const username = decodeURIComponent(target.username);
+          const ping = command(['PING']);
+          socket.write(password ? `${command(username ? ['AUTH', username, password] : ['AUTH', password])}${ping}` : ping);
+        });
+      });
+    } catch {
+      return false;
+    }
+  }
+
   private async consumeRedis(key: string, max: number, windowSeconds: number): Promise<boolean | null> {
     const url = this.config.get<string>('REDIS_URL');
     if (!url) return null;

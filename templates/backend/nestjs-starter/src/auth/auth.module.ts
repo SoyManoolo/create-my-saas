@@ -38,6 +38,6 @@ import { SecureEmailService } from './secure-email.service';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, RateLimitService, RateLimitGuard, SecureEmailService],
-  exports: [JwtModule, JwtAuthGuard, SecureEmailService],
+  exports: [JwtModule, JwtAuthGuard, RateLimitService, SecureEmailService],
 })
 export class AuthModule {}

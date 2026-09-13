@@ -53,9 +53,11 @@ pnpm migration:run
 pnpm start:dev
 ```
 
-La API queda en `http://localhost:3001` con el `.env.example`; `GET /` sirve
-como comprobación básica de disponibilidad. `pnpm start` inicia Nest sin modo
-watch y `pnpm start:debug` abre el depurador de Node.
+La API queda en `http://localhost:3001` con el `.env.example`. `GET /health`
+es liveness puro; `GET /ready` comprueba PostgreSQL y, si el rate limiting está
+activo, Redis con timeout corto. Una dependencia requerida no disponible
+devuelve `503 SERVICE_NOT_READY` estructurado. `pnpm start` inicia Nest sin
+modo watch y `pnpm start:debug` abre el depurador de Node.
 
 Para reconstruir desde una base vacía, usa una base desechable, ejecuta
 `pnpm migration:run` y repite el comando: la segunda ejecución no debe aplicar

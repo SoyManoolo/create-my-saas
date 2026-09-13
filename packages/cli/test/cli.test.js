@@ -158,6 +158,13 @@ test('generates selected templates and omits local artifacts', (t) => {
   const deploymentCompose = readFileSync(join(destination, 'deployment', 'compose.yaml'), 'utf8');
   assert.match(deploymentCompose, /target: migrate/);
   assert.match(deploymentCompose, /gateway/);
+  assert.match(deploymentCompose, /healthcheck:[\s\S]*\/ready/);
+  assert.match(deploymentCompose, /api:\n\s+condition: service_healthy/);
+  const gateway = readFileSync(join(destination, 'deployment', 'nginx.conf'), 'utf8');
+  assert.match(gateway, /location = \/health/);
+  assert.match(gateway, /location = \/ready[\s\S]*proxy_pass http:\/\/api:8000/);
+  const deploymentGuide = readFileSync(join(destination, 'deployment', 'README.md'), 'utf8');
+  assert.match(deploymentGuide, /app\.example\.com\/ready/);
   const productionEnvironment = readFileSync(join(destination, 'deployment', '.env.production.example'), 'utf8');
   assert.match(productionEnvironment, /^APP_ENV=production$/m);
   assert.match(productionEnvironment, /^DATABASE_SSL=true$/m);
@@ -259,6 +266,9 @@ test('configures the React Router API proxy from the selected backend', (t) => {
   const frontendEnvironment = readFileSync(join(destination, 'frontend', '.env.example'), 'utf8');
   assert.match(frontendEnvironment, /^API_PROXY_TARGET=http:\/\/localhost:3001$/m);
   assert.equal(existsSync(join(destination, 'frontend', 'app', 'routes', 'login.tsx')), true);
+  const deploymentCompose = readFileSync(join(destination, 'deployment', 'compose.yaml'), 'utf8');
+  assert.match(deploymentCompose, /fetch\('http:\/\/127\.0\.0\.1:8000\/ready'\)/);
+  assert.match(deploymentCompose, /api:\n\s+condition: service_healthy/);
 });
 
 test('rejects Fastify for a frontend that requires organizations and Stripe Billing', (t) => {
@@ -295,6 +305,9 @@ test('generates the lightweight authenticated Astro site with Fastify', (t) => {
   assert.equal(existsSync(join(destination, 'backend', 'src', 'server.ts')), true);
   assert.equal(existsSync(join(destination, 'frontend', 'src', 'pages', 'billing', 'index.astro')), false);
   assert.doesNotMatch(readFileSync(join(destination, 'frontend', 'astro.config.mjs'), 'utf8'), /organizations|billing/);
+  const deploymentCompose = readFileSync(join(destination, 'deployment', 'compose.yaml'), 'utf8');
+  assert.match(deploymentCompose, /fetch\('http:\/\/127\.0\.0\.1:8000\/ready'\)/);
+  assert.match(readFileSync(join(destination, 'deployment', 'nginx.conf'), 'utf8'), /location = \/ready/);
 });
 
 test('rejects Astro billing with Fastify before creating output', (t) => {

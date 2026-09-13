@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -13,6 +14,7 @@ from src.core.exceptions import AppError
 from src.core.exception_handlers import app_error_handler, request_validation_error_handler
 from src.core.logging import configure_logging
 from src.core.middleware import RequestContextMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
+from src.core.readiness import readiness_checks
 from src.db.database import close_database
 
 configure_logging()
@@ -52,6 +54,23 @@ def read_root():
 @app.get("/health", tags=["health"])
 async def health():
     return {"status": "ok"}
+
+@app.get("/ready", tags=["health"])
+async def ready():
+    checks = await readiness_checks()
+    if "unavailable" in checks.values():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "checks": checks,
+                "error": {
+                    "code": "SERVICE_NOT_READY",
+                    "message": "One or more required dependencies are unavailable.",
+                },
+            },
+        )
+    return {"status": "ready", "checks": checks}
 
 app.include_router(auth_router)
 app.include_router(oauth_router)

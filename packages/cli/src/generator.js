@@ -123,6 +123,13 @@ function backendDatabaseUrl(backend) {
     : 'postgresql://app:replace-me@postgres.example.com:5432/app';
 }
 
+function backendReadinessHealthcheck(backend) {
+  const command = backend.key === 'fastapi'
+    ? ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=1)"]
+    : ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8000/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"];
+  return JSON.stringify(command);
+}
+
 function frontendBuildArguments(frontend) {
   if (frontend.key === 'nextjs') return '      args:\n        API_PROXY_TARGET: http://api:8000\n';
   if (frontend.key === 'astro') return '      args:\n        PUBLIC_SITE_URL: ${FRONTEND_URL}\n        PUBLIC_API_BASE_URL: ""\n';
@@ -142,6 +149,12 @@ function deploymentCompose(backend, frontend) {
       PORT: "8000"
     expose:
       - "8000"
+    healthcheck:
+      test: ${backendReadinessHealthcheck(backend)}
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 10s
     networks:
       private:
         ipv4_address: ${'${API_IP:-172.30.0.30}'}
@@ -180,7 +193,7 @@ ${frontendBuildArguments(frontend)}    environment:
       dockerfile: gateway.Dockerfile
     depends_on:
       frontend:
-        condition: service_started${backend ? '\n      api:\n        condition: service_started' : ''}
+        condition: service_started${backend ? '\n      api:\n        condition: service_healthy' : ''}
     ports:
       - "80:80"
       - "443:443"
@@ -330,7 +343,7 @@ ${frontendLine}
 ${migration}
 \`\`\`
 
-No automatices \`migrate\` dentro del arranque de cada réplica: permite revisar el resultado y evita carreras entre despliegues simultáneos. Comprueba \`https://app.example.com/health\` tras el arranque.
+No automatices \`migrate\` dentro del arranque de cada réplica: permite revisar el resultado y evita carreras entre despliegues simultáneos. Compose comprueba \`/ready\` y el gateway no empieza a enrutar hasta que PostgreSQL y, cuando el rate limiting está activo, Redis estén disponibles. Comprueba \`https://app.example.com/ready\` tras el arranque; \`/health\` sólo confirma que el proceso sigue vivo.
 
 ## Comprobación local integrada
 
@@ -377,7 +390,12 @@ server {
     proxy_set_header Host $host;
   }
 
-${backend ? `  location ~ ^/(${apiPrefixes})(/|$) {
+${backend ? `  location = /ready {
+    proxy_pass http://api:8000;
+    proxy_set_header Host $host;
+  }
+
+  location ~ ^/(${apiPrefixes})(/|$) {
     proxy_pass http://api:8000;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

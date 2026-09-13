@@ -16,14 +16,17 @@ pnpm db:migrate
 pnpm dev
 ```
 
-The API listens on `http://localhost:3002`; `GET /health` is available without
-authentication. PostgreSQL must be running at `DATABASE_URL` before migrating.
+The API listens on `http://localhost:3002`; `GET /health` is a
+dependency-free liveness probe. `GET /ready` checks PostgreSQL and, when rate
+limiting is enabled, Redis with a short timeout. Unavailable required
+dependencies return a structured `503 SERVICE_NOT_READY` response.
+PostgreSQL must be running at `DATABASE_URL` before migrating.
 Set `DATABASE_SSL=true` with a certificate-verifying PostgreSQL endpoint in
 staging and production; the process refuses to start without it.
 
 ## Rate limiting and proxies
 
-Requests except `GET /health` are limited by client IP, HTTP method and route.
+Requests except `GET /health` and `GET /ready` are limited by client IP, HTTP method and route.
 The shared settings are `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` (default
 `30`), `RATE_LIMIT_WINDOW_SECONDS` (default `60`), `RATE_LIMIT_PREFIX`, and
 `REDIS_URL`. Redis is used for a counter shared by every worker; local

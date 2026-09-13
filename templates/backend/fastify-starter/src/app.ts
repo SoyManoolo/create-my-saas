@@ -25,7 +25,13 @@ const resetConfirmBody = z.object({
 const tokenBody = z.object({ token: z.string().min(20).max(512) });
 const oauthCallbackQuery = z.object({ code: z.string().min(1), state: z.string().min(1) });
 
-type AppDependencies = { config: Config; repository: SessionRepository; emailSender?: EmailSender };
+type AppDependencies = {
+  config: Config;
+  repository: SessionRepository;
+  databaseReady: () => Promise<void>;
+  redisReady?: () => Promise<boolean>;
+  emailSender?: EmailSender;
+};
 type OAuthProviderConfig = {
   clientId: string;
   clientSecret: string;
@@ -165,7 +171,7 @@ function requireCsrf(request: FastifyRequest, reply: FastifyReply, config: Confi
   return true;
 }
 
-export async function createApp({ config, repository, emailSender = new SecureEmailSender(config) }: AppDependencies): Promise<FastifyInstance> {
+export async function createApp({ config, repository, databaseReady, redisReady, emailSender = new SecureEmailSender(config) }: AppDependencies): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.environment !== 'test',
     trustProxy: config.TRUST_PROXY_HEADERS ? config.trustedProxyIps : false,
@@ -192,7 +198,7 @@ export async function createApp({ config, repository, emailSender = new SecureEm
   });
 
   app.addHook('onRequest', async (request, reply) => {
-    if (request.url.split('?', 1)[0] === '/health') return;
+    if (['/health', '/ready'].includes(request.url.split('?', 1)[0])) return;
     const path = request.routeOptions.url ?? request.url.split('?', 1)[0];
     const result = await rateLimiter.consume(`${request.method}:${path}:${request.ip}`);
     if (result === 'limited') {
@@ -279,6 +285,46 @@ export async function createApp({ config, repository, emailSender = new SecureEm
   }
 
   app.get('/health', async () => ({ status: 'ok' }));
+
+  app.get('/ready', async (_request, reply) => {
+    const probe = async (check: () => Promise<unknown>): Promise<'ok' | 'unavailable'> => {
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          check(),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Readiness timeout')), 500);
+          }),
+        ]);
+        return 'ok';
+      } catch {
+        return 'unavailable';
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
+    const [database, redis] = await Promise.all([
+      probe(databaseReady),
+      config.RATE_LIMIT_ENABLED
+        ? probe(async () => {
+          const available = redisReady ? await redisReady() : await rateLimiter.isRedisAvailable(500);
+          if (!available) throw new Error('Redis unavailable');
+        })
+        : Promise.resolve<'disabled'>('disabled'),
+    ]);
+    const checks = { database, redis };
+    if (database === 'unavailable' || redis === 'unavailable') {
+      return reply.code(503).send({
+        status: 'not_ready',
+        checks,
+        error: {
+          code: 'SERVICE_NOT_READY',
+          message: 'One or more required dependencies are unavailable.',
+        },
+      });
+    }
+    return reply.send({ status: 'ready', checks });
+  });
 
   app.post('/auth/register', async (request, reply) => {
     const body = registerBody.parse(request.body);
