@@ -23,6 +23,8 @@ export default defineConfig(() => {
         proxy: {
           '/auth': apiTarget,
           '/users': apiTarget,
+          '/organizations': apiTarget,
+          '/billing': apiTarget,
         },
       },
     } : undefined,

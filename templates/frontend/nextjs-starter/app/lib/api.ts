@@ -80,9 +80,30 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export type Authentication = { accessToken: string; user: User };
 export type OAuthProvider = "google" | "github";
+export type Organization = { id: string; name: string; slug: string };
+export type BillingPlan = { priceId: string; name: string; entitlements: Record<string, number | null> };
+export type BillingConfiguration = { configured: boolean; provider: "stripe"; usageMeterConfigured: boolean; plans: BillingPlan[] };
+export type BillingSubscription = {
+  organizationId: string; provider: string; plan: string; status: string; seats: number;
+  currentPeriodStart: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean;
+  entitlements: Array<{ key: string; limit: number | null; enabled: boolean; source: string; expiresAt: string | null }>;
+  usage: Array<{ metric: string; quantity: number }>;
+};
+export type BillingRedirect = { configured: boolean; url: string | null; reason?: string; sessionId?: string | null };
 
 function authentication(input: Record<string, unknown>): Authentication {
   return { accessToken: String(input.accessToken ?? input.access_token), user: normaliseUser(input.user as Record<string, unknown>) };
+}
+
+async function billingRequest<T>(organizationId: string, suffix: "subscription" | "configuration" | "checkout" | "portal", accessToken: string, body?: unknown): Promise<T> {
+  const options: RequestOptions = { method: suffix === "subscription" || suffix === "configuration" ? "GET" : "POST", accessToken, ...(body === undefined ? {} : { body }) };
+  try {
+    return await request<T>(`/organizations/${organizationId}/billing/${suffix}`, options);
+  } catch (cause) {
+    if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+    const fastApiSuffix = suffix === "subscription" ? "" : `/${suffix}`;
+    return request<T>(`/billing/organizations/${organizationId}${fastApiSuffix}`, options);
+  }
 }
 
 export const api = {
@@ -95,6 +116,11 @@ export const api = {
   resetPassword: (token: string, newPassword: string) => request<void>("/auth/password/reset/confirm", { method: "POST", body: { token, newPassword } }),
   verifyEmail: (token: string) => request<void>("/auth/email/verify", { method: "POST", body: { token } }),
   resendEmailVerification: (accessToken: string) => request<void>("/auth/email/resend", { method: "POST", accessToken }),
+  organizations: (accessToken: string) => request<Organization[]>("/organizations", { accessToken }),
+  billingConfiguration: (organizationId: string, accessToken: string) => billingRequest<BillingConfiguration>(organizationId, "configuration", accessToken),
+  billingSubscription: (organizationId: string, accessToken: string) => billingRequest<BillingSubscription>(organizationId, "subscription", accessToken),
+  createCheckout: (organizationId: string, priceId: string, accessToken: string) => billingRequest<BillingRedirect>(organizationId, "checkout", accessToken, { priceId, quantity: 1 }),
+  createPortal: (organizationId: string, accessToken: string) => billingRequest<BillingRedirect>(organizationId, "portal", accessToken),
   beginOAuth: async (provider: OAuthProvider): Promise<never> => {
     // Nest reports configured providers and returns a URL. FastAPI has no
     // provider list and owns the redirect at /start. Both keep PKCE and

@@ -18,7 +18,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). `API_PROXY_TARGET` hace que Next reenvíe `/auth/*` y `/users/*` conservando el mismo origen del navegador: así las cookies `HttpOnly` y la cookie CSRF funcionan correctamente. En producción configura el equivalente en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`.
+Abre [http://localhost:3000](http://localhost:3000). `API_PROXY_TARGET` hace que Next reenvíe `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` conservando el mismo origen del navegador: así las cookies `HttpOnly` y la cookie CSRF funcionan correctamente. En producción configura el equivalente en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`.
 
 ## Contrato API
 
@@ -30,6 +30,7 @@ El proxy selecciona el backend sin acoplar el navegador a su framework. `NEXT_PU
 - `GET /users/me` — `Authorization: Bearer <accessToken>`.
 - `POST /auth/password/reset/request`, `POST /auth/password/reset/confirm`, `POST /auth/email/verify`, `POST /auth/email/resend`.
 - OAuth: Nest expone `GET /auth/oauth/:provider`; FastAPI inicia en `GET /auth/oauth/:provider/start`. Ambos vuelven a `/auth/oauth/callback`, donde el frontend restaura la sesión. Requiere un backend con `oauth.pkce`, Google y GitHub configurados.
+- Facturación: `/billing` carga las organizaciones, los planes allowlisted y el estado de suscripción. El Checkout y el portal se crean en el backend y el navegador sólo sigue la URL de Stripe que devuelve la API.
 
 El access token se conserva exclusivamente en memoria durante la pestaña. Al cargar, la aplicación intenta renovar la sesión con la refresh cookie; si falla, redirige al login.
 

@@ -25,7 +25,8 @@
     "auth.protected-routes",
     "oauth.pkce",
     "oauth.google",
-    "oauth.github"
+    "oauth.github",
+    "billing.stripe"
   ],
   "compatibility": {
     "requiresBackendCapabilities": [
@@ -37,7 +38,9 @@
       "security.csrf",
       "oauth.pkce",
       "oauth.google",
-      "oauth.github"
+      "oauth.github",
+      "organizations",
+      "billing.stripe"
     ]
   },
   "environment": {

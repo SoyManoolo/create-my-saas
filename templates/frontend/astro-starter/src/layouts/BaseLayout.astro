@@ -34,7 +34,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
         <a href="/pricing">Pricing</a>
         <a href="/docs">Docs</a>
         <a href="/blog">Blog</a>
-        {protectedPage ? <><a href="/app/">Espacio</a><a href="/account/">Cuenta</a><button type="button" class="text-button" data-logout>Cerrar sesión</button></> : <><a href="/login/">Entrar</a><a class="nav-button" href="/register/">Crear cuenta</a></>}
+        {protectedPage ? <><a href="/app/">Espacio</a><a href="/billing/">Facturación</a><a href="/account/">Cuenta</a><button type="button" class="text-button" data-logout>Cerrar sesión</button></> : <><a href="/login/">Entrar</a><a class="nav-button" href="/register/">Crear cuenta</a></>}
       </nav>
     </header>
     <main><slot /></main>

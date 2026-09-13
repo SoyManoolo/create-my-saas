@@ -10,7 +10,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap. El generador rellena `API_PROXY_TARGET` para que Astro reenvíe `/auth` y `/users` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una ruta del mismo origen que reenvíe esos prefijos; esto conserva el alcance de las cookies `HttpOnly` y CSRF.
+Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap. El generador rellena `API_PROXY_TARGET` para que Astro reenvíe `/auth`, `/users`, `/organizations` y `/billing` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una ruta del mismo origen que reenvíe esos prefijos; esto conserva el alcance de las cookies `HttpOnly` y CSRF.
 
 ## Qué incluye
 
@@ -18,6 +18,7 @@ Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL`
 - Etiquetas `description`, canonical, Open Graph y Twitter Card por página.
 - `@astrojs/sitemap` y una ruta `robots.txt`.
 - Registro, login, sesión con refresh cookie `HttpOnly`, rutas protegidas, logout, recuperación, verificación de correo y OAuth Google/GitHub.
+- Una ruta protegida `/billing/` que consulta las organizaciones, planes allowlisted y suscripción. Checkout y el portal de cliente se crean en el backend; el navegador sólo sigue la URL segura devuelta por Stripe.
 
 ## Límites deliberados
 

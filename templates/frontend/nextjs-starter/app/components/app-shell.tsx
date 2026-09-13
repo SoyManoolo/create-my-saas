@@ -9,6 +9,7 @@ import { useAuth } from "./auth-provider";
 const items = [
   { href: "/", label: "Inicio", icon: "⌂" },
   { href: "/settings", label: "Configuración", icon: "⚙" },
+  { href: "/billing", label: "Facturación", icon: "€" },
   { href: "/account", label: "Cuenta", icon: "◉" },
 ];
 

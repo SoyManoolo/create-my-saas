@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout title="Facturación — LaunchKit" description="Planes y suscripción de tu organización." protected>
+  <section class="dashboard" data-protected-content hidden data-billing>
+    <p class="eyebrow">FACTURACIÓN</p>
+    <h1>Planes y suscripción</h1>
+    <p class="lead">Elige un plan para tu organización. El pago y la gestión de la suscripción se completan de forma segura en Stripe.</p>
+    <label class="billing-select" data-billing-organization hidden>Organización <select></select></label>
+    <p class="form-status" data-billing-status aria-live="polite"></p>
+    <section class="account-card" data-billing-summary hidden></section>
+    <section class="card-grid" data-billing-plans></section>
+  </section>
+</BaseLayout>

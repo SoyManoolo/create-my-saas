@@ -10,6 +10,9 @@ export default [
   route("auth/oauth/callback", "routes/oauth-callback.tsx"),
   route("app", "routes/app.tsx"),
   route("account", "routes/account.tsx"),
+  route("billing", "routes/billing.tsx"),
   route("auth/*", "routes/auth-proxy.ts"),
   route("users/*", "routes/users-proxy.ts"),
+  route("organizations/*", "routes/organizations-proxy.ts"),
+  route("billing/*", "routes/billing-proxy.ts"),
 ] satisfies RouteConfig;

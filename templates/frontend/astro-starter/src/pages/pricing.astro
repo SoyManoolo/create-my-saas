@@ -5,11 +5,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <BaseLayout title="Pricing — LaunchKit" description="Straightforward example SaaS pricing page.">
   <section class="content">
     <p class="eyebrow">Pricing</p>
-    <h1>Define planes que encajen con tu producto.</h1>
+    <h1>Planes configurados desde tu backend.</h1>
+    <p class="lead">Los planes reales y Checkout se muestran dentro del área protegida para la organización elegida.</p>
+    <a class="button" href="/billing/">Ver facturación</a>
     <div class="card-grid">
-      <article class="card"><h2>Plan inicial</h2><p>Define el precio y los límites reales de tu producto.</p></article>
-      <article class="card"><h2>Plan de equipo</h2><p>Añade aquí la colaboración y capacidades que sí ofrezcas.</p></article>
-      <article class="card"><h2>Plan a medida</h2><p>Documenta el soporte, la seguridad y el volumen que puedas garantizar.</p></article>
+      <article class="card"><h2>Planes allowlisted</h2><p>La interfaz sólo muestra los price IDs permitidos por la configuración de Stripe.</p></article>
+      <article class="card"><h2>Checkout seguro</h2><p>El pago se crea en el backend y continúa en la URL devuelta por Stripe.</p></article>
+      <article class="card"><h2>Portal de cliente</h2><p>La suscripción, facturas y método de pago se gestionan en el portal de Stripe.</p></article>
     </div>
   </section>
 </BaseLayout>

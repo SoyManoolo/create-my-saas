@@ -20,7 +20,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:5173](http://localhost:5173). La ruta de servidor integrada reenvía `/auth/*` y `/users/*` a `API_PROXY_TARGET`, preservando las cookies en el mismo origen de navegador. En producción configura el mismo comportamiento en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`.
+Abre [http://localhost:5173](http://localhost:5173). La ruta de servidor integrada reenvía `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` a `API_PROXY_TARGET`, preservando las cookies en el mismo origen de navegador. En producción configura el mismo comportamiento en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`.
 
 ## Contrato API
 
@@ -32,6 +32,7 @@ La plantilla consume las rutas canónicas:
 - `GET /users/me` — con `Authorization: Bearer <accessToken>`
 - `POST /auth/password/reset/request`, `POST /auth/password/reset/confirm`, `POST /auth/email/verify`, `POST /auth/email/resend`
 - OAuth Google/GitHub: Nest entrega `authorizationUrl` en `GET /auth/oauth/:provider`; FastAPI inicia el navegador en `GET /auth/oauth/:provider/start`. Los dos regresan a `/auth/oauth/callback` para restaurar la sesión.
+- Facturación: `/billing` carga las organizaciones, los planes allowlisted y el estado de suscripción. El Checkout y el portal se crean en el backend y el navegador sólo sigue la URL de Stripe que devuelve la API.
 
 Tras cargar la aplicación se intenta `POST /auth/refresh`; si falla, las rutas protegidas redirigen al login. El proxy de `app/routes/api-proxy.ts` está limitado a las rutas de API declaradas y mantiene el valor de `API_PROXY_TARGET` exclusivamente en el servidor.
 

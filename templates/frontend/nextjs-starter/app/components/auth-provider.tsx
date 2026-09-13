@@ -11,6 +11,7 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   resendVerification: () => Promise<void>;
   completeOAuth: () => Promise<void>;
+  getAccessToken: () => string;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -63,8 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOAuth = useCallback(async () => { await restoreSession(); }, [restoreSession]);
+  const getAccessToken = useCallback(() => {
+    if (!accessToken.current) throw new Error("La sesión ha caducado. Inicia sesión de nuevo.");
+    return accessToken.current;
+  }, []);
 
-  return <AuthContext.Provider value={{ status, user, signIn, signOut, resendVerification, completeOAuth }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ status, user, signIn, signOut, resendVerification, completeOAuth, getAccessToken }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
