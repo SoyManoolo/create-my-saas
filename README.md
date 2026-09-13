@@ -43,10 +43,25 @@ los frameworks entre sí.
 
 La base común buscada incluye autenticación segura para navegador, usuarios y
 organizaciones, permisos, configuración de PostgreSQL y migraciones, límites de
-peticiones, flujos de cuenta y una interfaz lista para empezar un producto. Las
-integraciones específicas de cada SaaS —proveedor de pagos, emails reales,
-dominio de negocio y despliegue— permanecen configurables o pendientes de la
-plantilla correspondiente.
+peticiones, flujos de cuenta y una interfaz lista para empezar un producto.
+
+## Requisitos para producción
+
+Antes de poner un SaaS real en línea todavía hay que conectar las integraciones
+del producto final. No es código ausente de los starters: son servicios y
+credenciales que pertenecen a cada despliegue. Configura PostgreSQL, Redis con
+TLS, la entrega transaccional de correo y las credenciales OAuth de los
+proveedores que ofrezcas. Si vas a cobrar, configura también Stripe, los precios
+permitidos y el endpoint de webhooks.
+
+FastAPI, NestJS y Fastify exigen explícitamente los servicios de los que
+dependen en `staging` y `production` y fallan de forma segura si faltan o no se
+pueden usar. En particular, los límites de petición requieren Redis mediante
+`rediss://` y los flujos de cuenta requieren una entrega de correo autenticada.
+FastAPI y NestJS también dejan Checkout, Portal y webhooks de Stripe
+deshabilitados hasta que se proporcione una configuración válida. Consulta el
+README y el archivo `.env.example` del starter generado para los nombres de
+variables y los callbacks registrados.
 
 ## Uso
 
