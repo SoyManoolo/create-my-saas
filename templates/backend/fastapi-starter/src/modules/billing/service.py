@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import Settings, settings
 from src.core.exceptions import AppError
 from src.db.base import utc_now
+from src.modules.audit.service import AuditAction, record_audit_event
 from src.modules.users.model import BillingEntitlement, BillingWebhookEvent, Organization, Subscription, UsageRecord
 
 _ENTITLEMENT_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")
@@ -60,7 +61,7 @@ class BillingService:
             "entitlements": [self._entitlement_json(row) for row in entitlements], "usage": usage,
         }
 
-    async def checkout(self, organization_id: UUID, price_id: str, quantity: int) -> dict[str, Any]:
+    async def checkout(self, organization_id: UUID, price_id: str, quantity: int, actor_user_id: UUID) -> dict[str, Any]:
         if not self.is_stripe_configured():
             return {"configured": False, "url": None, "sessionId": None}
         plan = self.price_plans().get(price_id)
@@ -82,9 +83,18 @@ class BillingService:
             raise AppError("The billing provider could not create Checkout.", code="BILLING_PROVIDER_ERROR", status_code=502) from error
         if not session.url:
             raise AppError("The billing provider did not return a Checkout URL.", code="BILLING_PROVIDER_ERROR", status_code=502)
+        record_audit_event(
+            self.db,
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            action=AuditAction.BILLING_CHECKOUT_CREATED,
+            target_type="billing",
+            metadata={"provider": "stripe", "plan": plan["name"], "quantity": quantity},
+        )
+        await self.db.commit()
         return {"configured": True, "url": session.url, "sessionId": session.id}
 
-    async def portal(self, organization_id: UUID) -> dict[str, Any]:
+    async def portal(self, organization_id: UUID, actor_user_id: UUID) -> dict[str, Any]:
         if not self.is_stripe_configured():
             return {"configured": False, "url": None, "reason": "Stripe billing is not configured."}
         subscription = await self._subscription(organization_id, create=False)
@@ -98,6 +108,15 @@ class BillingService:
             session = stripe.billing_portal.Session.create(**params)
         except stripe.StripeError as error:
             raise AppError("The billing provider could not create the portal.", code="BILLING_PROVIDER_ERROR", status_code=502) from error
+        record_audit_event(
+            self.db,
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            action=AuditAction.BILLING_PORTAL_CREATED,
+            target_type="billing",
+            metadata={"provider": "stripe"},
+        )
+        await self.db.commit()
         return {"configured": True, "url": session.url}
 
     async def record_usage(self, organization_id: UUID, metric: str, quantity: int, idempotency_key: str, recorded_at: datetime | None = None) -> dict[str, Any]:

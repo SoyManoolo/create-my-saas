@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import AppError
 from src.core.email import send_secure_email
 from src.db.database import get_db
+from src.modules.audit.service import AuditAction, record_audit_event
 from src.modules.auth.security.tokens import get_current_user, opaque_token, token_hash, utc_now
 from src.modules.users.model import Invitation, Membership, MembershipRole, Organization, User
 
@@ -96,6 +97,17 @@ async def invite(org_id: UUID, payload: InviteCreate, user: User = Depends(get_c
             invitation.invited_by_id = user.id
             deliver = True
 
+    if deliver:
+        record_audit_event(
+            db,
+            organization_id=org_id,
+            actor_user_id=user.id,
+            action=AuditAction.INVITATION_CREATED,
+            target_type="invitation",
+            target_id=invitation_id,
+            metadata={"email": email, "role": payload.role.value},
+        )
+
     try:
         await db.commit()
     except Exception:
@@ -120,13 +132,22 @@ async def accept_invitation(payload: AcceptInvite, user: User = Depends(get_curr
             Invitation.role != MembershipRole.OWNER.value,
         )
         .values(accepted_at=now)
-        .returning(Invitation.organization_id, Invitation.role)
+        .returning(Invitation.id, Invitation.organization_id, Invitation.role)
     )).one_or_none()
     if accepted:
         await db.execute(
             postgres_insert(Membership)
             .values(organization_id=accepted.organization_id, user_id=user.id, role=accepted.role)
             .on_conflict_do_nothing(index_elements=[Membership.organization_id, Membership.user_id])
+        )
+        record_audit_event(
+            db,
+            organization_id=accepted.organization_id,
+            actor_user_id=user.id,
+            action=AuditAction.INVITATION_ACCEPTED,
+            target_type="invitation",
+            target_id=accepted.id,
+            metadata={"role": accepted.role},
         )
         try:
             await db.commit()
@@ -150,7 +171,19 @@ async def update_member_role(org_id: UUID, member_id: UUID, payload: MembershipU
     if not target: raise AppError("Membership was not found.", code="MEMBERSHIP_NOT_FOUND", status_code=404)
     if target.role == MembershipRole.OWNER.value or payload.role == MembershipRole.OWNER:
         raise AppError("Owner role cannot be changed through this endpoint.", code="OWNER_ROLE_PROTECTED", status_code=400)
-    target.role = payload.role.value; await db.commit(); return None
+    previous_role = target.role
+    if previous_role != payload.role.value:
+        target.role = payload.role.value
+        record_audit_event(
+            db,
+            organization_id=org_id,
+            actor_user_id=user.id,
+            action=AuditAction.MEMBER_ROLE_CHANGED,
+            target_type="user",
+            target_id=target.user_id,
+            metadata={"previousRole": previous_role, "newRole": payload.role.value},
+        )
+    await db.commit(); return None
 @router.delete("/{org_id}/members/{member_id}", status_code=204)
 async def remove_member(org_id: UUID, member_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await lock_organization(org_id, db)
@@ -158,6 +191,15 @@ async def remove_member(org_id: UUID, member_id: UUID, user: User = Depends(get_
     target = (await db.execute(select(Membership).where(Membership.organization_id == org_id, Membership.id == member_id).with_for_update())).scalar_one_or_none()
     if not target: raise AppError("Membership was not found.", code="MEMBERSHIP_NOT_FOUND", status_code=404)
     if target.role == MembershipRole.OWNER.value: raise AppError("Transfer ownership before removing the owner.", code="OWNER_REQUIRED", status_code=409)
+    record_audit_event(
+        db,
+        organization_id=org_id,
+        actor_user_id=user.id,
+        action=AuditAction.MEMBER_REMOVED,
+        target_type="user",
+        target_id=target.user_id,
+        metadata={"role": target.role},
+    )
     await db.delete(target); await db.commit(); return None
 
 @router.post("/{org_id}/ownership/transfer", status_code=204)
@@ -194,8 +236,18 @@ async def transfer_ownership(org_id: UUID, payload: OwnershipTransfer, user: Use
 
         # Promote before demoting. Both writes remain invisible until this single
         # transaction commits, so observers never see an ownerless organization.
+        target_previous_role = target.role
         target.role = MembershipRole.OWNER.value
         current_owner.role = MembershipRole.ADMIN.value
+        record_audit_event(
+            db,
+            organization_id=org_id,
+            actor_user_id=user.id,
+            action=AuditAction.OWNERSHIP_TRANSFERRED,
+            target_type="user",
+            target_id=payload.user_id,
+            metadata={"previousOwnerNewRole": MembershipRole.ADMIN.value, "newOwnerPreviousRole": target_previous_role},
+        )
         await db.commit()
         return None
     except Exception:

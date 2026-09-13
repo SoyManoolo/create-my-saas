@@ -49,6 +49,7 @@ class OwnershipSession:
         self.step = 0
         self.locked = False
         self.statements = []
+        self.added = []
 
     async def execute(self, statement):
         self.statements.append(statement)
@@ -70,6 +71,9 @@ class OwnershipSession:
     async def rollback(self):
         self._release()
 
+    def add(self, value):
+        self.added.append(value)
+
     def _release(self):
         if self.locked:
             self.locked = False
@@ -82,6 +86,7 @@ class MemberMutationSession:
         self.membership = membership
         self.step = 0
         self.deleted = False
+        self.added = []
 
     async def execute(self, _statement):
         self.step += 1
@@ -92,6 +97,9 @@ class MemberMutationSession:
 
     async def commit(self):
         pass
+
+    def add(self, value):
+        self.added.append(value)
 
 
 class OwnershipTransferTests(unittest.IsolatedAsyncioTestCase):
@@ -110,12 +118,15 @@ class OwnershipTransferTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(memberships[state.target.id].role, MembershipRole.OWNER.value)
         self.assertEqual(memberships[state.actor.id].role, MembershipRole.ADMIN.value)
         self.assertEqual(sum(membership.role == MembershipRole.OWNER.value for membership in state.memberships), 1)
+        self.assertEqual(session.added[0].action, "organization.ownership.transferred")
+        self.assertEqual(session.added[0].target_id, str(state.target.id))
         for statement in session.statements:
             self.assertIn("FOR UPDATE", str(statement.compile(dialect=postgresql.dialect())))
 
         leave_session = MemberMutationSession(state.organization, memberships[state.actor.id])
         await remove_member(state.organization_id, memberships[state.actor.id].id, state.actor, leave_session)
         self.assertTrue(leave_session.deleted)
+        self.assertEqual(leave_session.added[0].action, "organization.member.removed")
 
     async def test_admin_and_member_cannot_transfer_ownership(self):
         for role in (MembershipRole.ADMIN, MembershipRole.MEMBER):

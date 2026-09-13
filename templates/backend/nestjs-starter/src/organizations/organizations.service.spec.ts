@@ -20,7 +20,8 @@ describe('OrganizationsService', () => {
       transaction: jest.fn(async (callback) => callback({ getRepository: (entity) => repositories.get(entity) })),
     };
     const secureEmail = { send: jest.fn() } as unknown as SecureEmailService;
-    return { service: new OrganizationsService(organizations as never, memberships as never, invitations as never, dataSource as never, secureEmail), dataSource, organizations, memberships, invitations, secureEmail };
+    const audit = { record: jest.fn(async (event) => event) };
+    return { service: new OrganizationsService(organizations as never, memberships as never, invitations as never, dataSource as never, secureEmail, audit as never), dataSource, organizations, memberships, invitations, secureEmail, audit };
   }
 
   it('creates the organization and its owner membership in one transaction', async () => {
@@ -36,13 +37,13 @@ describe('OrganizationsService', () => {
   it('validates and normalizes invitation email addresses before persisting them', async () => {
     const { service } = setup();
 
-    await expect(service.invite('organization-1', 'not-an-email', 'member')).rejects.toEqual(
+    await expect(service.invite('organization-1', user.id, 'not-an-email', 'member')).rejects.toEqual(
       new AppError('INVALID_INVITATION_EMAIL', 'A valid invitation email is required.', 400),
     );
   });
 
   it('does not create or send a second active invitation for the same recipient', async () => {
-    const { service, invitations, secureEmail } = setup();
+    const { service, invitations, secureEmail, audit } = setup();
     let stored: Invitation | undefined;
     const query = { where: jest.fn().mockReturnThis(), getOne: jest.fn(async () => stored) };
     invitations.createQueryBuilder.mockReturnValue(query);
@@ -51,12 +52,18 @@ describe('OrganizationsService', () => {
       return stored;
     });
 
-    await service.invite('organization-1', 'Member@Example.com', 'member');
-    await service.invite('organization-1', 'member@example.com', 'member');
+    await service.invite('organization-1', user.id, 'Member@Example.com', 'member');
+    await service.invite('organization-1', user.id, 'member@example.com', 'member');
 
     expect(invitations.save).toHaveBeenCalledTimes(1);
     expect(secureEmail.send).toHaveBeenCalledTimes(1);
     expect(secureEmail.send).toHaveBeenCalledWith('member@example.com', 'Organization invitation', expect.any(String));
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith({
+      organizationId: 'organization-1', actorUserId: user.id, action: 'organization.invitation.created',
+      targetType: 'invitation', targetId: 'invitation-1', metadata: { email: 'member@example.com', role: 'member' },
+    }, expect.anything());
+    expect(JSON.stringify(audit.record.mock.calls)).not.toMatch(/token|hash/i);
   });
 
   it('treats a concurrent active-invitation constraint conflict as an idempotent retry', async () => {
@@ -66,7 +73,7 @@ describe('OrganizationsService', () => {
     invitations.save.mockRejectedValue({ code: '23505' });
     invitations.findOneBy.mockResolvedValue(activeInvitation);
 
-    await expect(service.invite('organization-1', 'member@example.com', 'member')).resolves.toBeUndefined();
+    await expect(service.invite('organization-1', user.id, 'member@example.com', 'member')).resolves.toBeUndefined();
 
     expect(secureEmail.send).not.toHaveBeenCalled();
   });
@@ -162,6 +169,7 @@ describe('OrganizationsService', () => {
       {} as never,
       dataSource as never,
       { send: jest.fn() } as never,
+      { record: jest.fn(async (event) => event) } as never,
     );
     return { service, organizationId, actor, target, users, storedMemberships, lockAliases };
   }

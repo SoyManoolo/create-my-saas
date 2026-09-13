@@ -19,7 +19,7 @@ Actualmente hay seis plantillas:
 
 | Capa | Opción | Estado y propósito |
 | --- | --- | --- |
-| Backend | `fastapi` | API Python completa: sesiones de navegador, CSRF, usuarios, organizaciones, RBAC, recuperación/verificación, OAuth y modelos de billing. |
+| Backend | `fastapi` | API Python completa: sesiones de navegador, CSRF, usuarios, organizaciones, RBAC, audit log, recuperación/verificación, OAuth y billing. |
 | Backend | `nestjs` | API TypeScript modular con el mismo contrato funcional que FastAPI. |
 | Backend | `fastify` | API TypeScript ligera con PostgreSQL, sesiones, CSRF, recuperación, verificación de email y OAuth de Google/GitHub. No incluye todavía organizaciones ni Stripe Billing. |
 | Frontend | `nextjs` | Dashboard con sesión de navegador, rutas protegidas y flujos de cuenta. |

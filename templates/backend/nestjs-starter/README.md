@@ -1,7 +1,7 @@
 # NestJS SaaS starter
 
 API SaaS modular en NestJS con PostgreSQL, sesiones seguras para navegador,
-usuarios, organizaciones con RBAC e invitaciones, recuperación y verificación
+usuarios, organizaciones con RBAC, invitaciones y audit log, recuperación y verificación
 de cuenta, OAuth de Google/GitHub y facturación opcional con Stripe. Las
 migraciones son la única forma de crear o modificar el esquema: TypeORM no usa
 `synchronize` fuera de las pruebas.
@@ -233,8 +233,23 @@ reescribir ni reconstruir el cuerpo del webhook antes de que llegue a Nest.
 Los administradores u owners de una organización usan `POST
 /organizations/:organizationId/billing/checkout` y `/portal`. Checkout vuelve
 al `FRONTEND_URL` configurado. Los entitlements se actualizan por webhook; el
-uso facturable se registra sólo desde código de servidor de confianza mediante
-un idempotency key, nunca desde una mutación HTTP del navegador.
+  uso facturable se registra sólo desde código de servidor de confianza mediante
+  un idempotency key, nunca desde una mutación HTTP del navegador.
+
+## Audit log de acciones sensibles
+
+Nest registra en la tabla append-only `audit_logs` las invitaciones emitidas y
+aceptadas, cambios de rol, bajas de miembros, transferencias de ownership y la
+creación efectiva de Checkout o Portal. Sólo owners y administradores pueden
+consultarlo con `GET /organizations/:organizationId/audit-logs`. `limit` vale 50
+por defecto (máximo 100) y `cursor` continúa desde `nextCursor`.
+
+Cada evento conserva organización, actor, acción, objetivo, fecha y metadatos
+específicos permitidos por una allowlist. Nunca se guardan tokens o hashes,
+payloads de petición/proveedor, credenciales, IDs de cliente/sesión/suscripción
+de Stripe, medios de pago ni tarjetas. El email invitado sí se conserva para
+investigación de incidencias; antes de usar este registro para enterprise o
+compliance, define la retención y exportación exigidas por el producto.
 
 ## Diagnóstico de fallos
 

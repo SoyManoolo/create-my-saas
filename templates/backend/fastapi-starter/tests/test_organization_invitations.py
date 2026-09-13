@@ -8,7 +8,7 @@ from uuid import uuid4
 from sqlalchemy.dialects import postgresql
 
 from src.modules.organizations import router
-from src.modules.users.model import MembershipRole
+from src.modules.users.model import AuditLog, MembershipRole
 
 
 class Result:
@@ -28,6 +28,7 @@ class RecordingSession:
         self.statements = []
         self.commits = 0
         self.rollbacks = 0
+        self.added = []
 
     async def execute(self, statement):
         self.statements.append(statement)
@@ -38,6 +39,9 @@ class RecordingSession:
 
     async def rollback(self):
         self.rollbacks += 1
+
+    def add(self, value):
+        self.added.append(value)
 
 
 class OrganizationInvitationTests(unittest.TestCase):
@@ -58,11 +62,16 @@ class OrganizationInvitationTests(unittest.TestCase):
         self.assertIn("ON CONFLICT (organization_id, email) WHERE accepted_at IS NULL AND cancelled_at IS NULL DO NOTHING", statement)
         self.assertEqual(response, {"id": str(invitation_id), "accepted": False})
         self.assertEqual(session.commits, 1)
+        self.assertEqual([(event.action, event.target_id, event.metadata_) for event in session.added if isinstance(event, AuditLog)], [
+            ("organization.invitation.created", str(invitation_id), {"email": "member@example.com", "role": "member"}),
+        ])
+        self.assertNotIn("raw-token", repr(session.added))
         deliver.assert_awaited_once()
 
     def test_accepting_an_invitation_claims_it_and_upserts_membership(self):
         organization_id = uuid4()
-        session = RecordingSession([SimpleNamespace(organization_id=organization_id, role="member"), None])
+        invitation_id = uuid4()
+        session = RecordingSession([SimpleNamespace(id=invitation_id, organization_id=organization_id, role="member"), None])
         user = SimpleNamespace(id=uuid4(), email="member@example.com")
 
         asyncio.run(router.accept_invitation(router.AcceptInvite(token="raw-token"), user, session))
@@ -71,9 +80,12 @@ class OrganizationInvitationTests(unittest.TestCase):
         membership = str(session.statements[1].compile(dialect=postgresql.dialect()))
         self.assertIn("accepted_at IS NULL", claim)
         self.assertIn("cancelled_at IS NULL", claim)
-        self.assertIn("RETURNING invitations.organization_id, invitations.role", claim)
+        self.assertIn("RETURNING invitations.id, invitations.organization_id, invitations.role", claim)
         self.assertIn("ON CONFLICT (organization_id, user_id) DO NOTHING", membership)
         self.assertEqual(session.commits, 1)
+        self.assertEqual([(event.action, event.target_id) for event in session.added if isinstance(event, AuditLog)], [
+            ("organization.invitation.accepted", str(invitation_id)),
+        ])
 
     def test_reaccepting_a_completed_invitation_is_a_noop_for_the_same_email(self):
         now = router.utc_now()

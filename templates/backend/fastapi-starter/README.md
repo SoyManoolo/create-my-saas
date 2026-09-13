@@ -2,7 +2,7 @@
 
 This template provides a modular SaaS API: password and token authentication, rotating
 refresh sessions, one-use verification/recovery tokens, profiles, organizations with
-RBAC invitations, Stripe Checkout/Portal billing with verified webhooks, entitlements and trusted usage recording, and Redis-backed rate limiting.
+RBAC invitations, organization audit logs, Stripe Checkout/Portal billing with verified webhooks, entitlements and trusted usage recording, and Redis-backed rate limiting.
 
 ## Run it
 
@@ -48,3 +48,18 @@ token-free redirect to the frontend. Provider client credentials remain environm
 values. Redis is installed by default. Production and staging require
 an available `rediss://` endpoint; development can fall back to an in-process limiter
 when Redis is deliberately unavailable.
+
+## Sensitive-action audit log
+
+FastAPI records successful invitation creation/acceptance, role changes, member
+removal, ownership transfers, and Stripe Checkout/Portal creation in the
+append-only `audit_logs` table. Owners and administrators can read the newest
+events through `GET /organizations/{organizationId}/audit-logs`; `limit` is 50
+by default (100 maximum) and `cursor` continues from `nextCursor`.
+
+Each event stores the organization, actor, action, target, timestamp, and only
+action-specific allowlisted metadata. Invitation tokens and hashes, request
+bodies, credentials, Stripe customer/session/subscription IDs, payment methods,
+and card data are never audit metadata. The invited email is retained for
+incident investigation, so define retention/export rules appropriate to the
+product before using the log for enterprise or compliance purposes.

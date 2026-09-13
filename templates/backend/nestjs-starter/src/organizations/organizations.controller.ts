@@ -19,7 +19,7 @@ export class OrganizationsController {
  @Get() list(@CurrentUser() user: User) { return this.organizations.list(user.id); }
  @Get(':organizationId/members') @UseGuards(OrganizationRoleGuard) members(@Param('organizationId') id: string): Promise<Membership[]> { return this.organizations.members(id); }
  @Post(':organizationId/invitations') @UseGuards(OrganizationRoleGuard) @OrganizationRoles('owner', 'admin') @HttpCode(HttpStatus.NO_CONTENT)
- async invite(@Param('organizationId') id: string, @Body() body: InviteDto): Promise<void> { await this.organizations.invite(id, body.email, body.role); }
+ async invite(@CurrentUser() user: User, @Param('organizationId') id: string, @Body() body: InviteDto): Promise<void> { await this.organizations.invite(id, user.id, body.email, body.role); }
  @Post('invitations/accept') @HttpCode(HttpStatus.CREATED)
  accept(@CurrentUser() user: User, @Body() body: AcceptInvitationDto) { return this.organizations.acceptInvitation(user, body.token); }
  @Patch(':organizationId/members/:userId') @UseGuards(OrganizationRoleGuard) @OrganizationRoles('owner', 'admin') @HttpCode(HttpStatus.NO_CONTENT)

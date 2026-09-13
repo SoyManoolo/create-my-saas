@@ -230,6 +230,16 @@ describe('AppController (e2e)', () => {
         .expect(201);
     }
 
+    await request(app.getHttpServer())
+      .get(`/organizations/${organization.body.id}/audit-logs`)
+      .set('Authorization', `Bearer ${member.accessToken}`)
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch(`/organizations/${organization.body.id}/members/${admin.userId}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ role: 'member' })
+      .expect(204);
+
     for (const account of [admin, member]) {
       await request(app.getHttpServer())
         .post(`/organizations/${organization.body.id}/ownership/transfer`)
@@ -280,6 +290,32 @@ describe('AppController (e2e)', () => {
       .expect(200);
     expect(remainingMembers.body.some((membership: { userId: string }) => membership.userId === owner.userId)).toBe(false);
     expect(remainingMembers.body.filter((membership: { role: string }) => membership.role === 'owner')).toHaveLength(1);
+
+    const firstAuditPage = await request(app.getHttpServer())
+      .get(`/organizations/${organization.body.id}/audit-logs?limit=2`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    expect(firstAuditPage.body.items).toHaveLength(2);
+    expect(firstAuditPage.body.nextCursor).toEqual(expect.any(String));
+    const secondAuditPage = await request(app.getHttpServer())
+      .get(`/organizations/${organization.body.id}/audit-logs?limit=100&cursor=${firstAuditPage.body.nextCursor}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    const auditItems = [...firstAuditPage.body.items, ...secondAuditPage.body.items];
+    expect(new Set(auditItems.map((item: { id: string }) => item.id)).size).toBe(auditItems.length);
+    expect(auditItems.map((item: { action: string }) => item.action)).toEqual(expect.arrayContaining([
+      'organization.invitation.created',
+      'organization.invitation.accepted',
+      'organization.member.role_changed',
+      'organization.ownership.transferred',
+      'organization.member.removed',
+    ]));
+    const serializedAudit = JSON.stringify(auditItems);
+    for (const delivery of deliveries) {
+      const deliveredToken = delivery.text.match(/[?&]token=([^\s]+)/)?.[1] ?? delivery.text.match(/token: (\S+)/)?.[1];
+      if (deliveredToken) expect(serializedAudit).not.toContain(decodeURIComponent(deliveredToken));
+    }
+    expect(serializedAudit).not.toMatch(/tokenHash|sessionId|providerCustomerId|paymentMethod|card/i);
   });
 
   afterEach(async () => {

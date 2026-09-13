@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import Stripe from 'stripe';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AppError } from '../common/errors/app.error';
+import { AuditLogService } from '../audit/audit-log.service';
 import { Organization } from '../organizations/organization.entity';
 import { BillingCustomer } from './billing-customer.entity';
 import { BillingEntitlement } from './billing-entitlement.entity';
@@ -27,6 +28,7 @@ export class BillingService {
     @InjectRepository(Organization) private readonly organizations: Repository<Organization>,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
+    private readonly audit: AuditLogService,
   ) {}
 
   async subscription(organizationId: string): Promise<Subscription> {
@@ -55,7 +57,7 @@ export class BillingService {
     return { configured: this.isStripeConfigured(), provider: 'stripe', usageMeterConfigured: Boolean(this.config.get<string>('STRIPE_USAGE_EVENT_NAME')?.trim()), plans };
   }
 
-  async checkout(organizationId: string, priceId: string, quantity: number): Promise<{ configured: boolean; url: string | null; sessionId: string | null }> {
+  async checkout(organizationId: string, priceId: string, quantity: number, actorUserId: string): Promise<{ configured: boolean; url: string | null; sessionId: string | null }> {
     if (!this.isStripeConfigured()) return { configured: false, url: null, sessionId: null };
     const plan = this.pricePlans().get(priceId);
     if (!plan) throw new AppError('BILLING_PRICE_NOT_AVAILABLE', 'This billing plan is not available.', 400);
@@ -69,11 +71,15 @@ export class BillingService {
       subscription_data: { metadata: { organization_id: organizationId, plan: plan.name } },
     });
     if (!session.url) throw new AppError('BILLING_PROVIDER_ERROR', 'The billing provider did not return a checkout URL.', 502);
+    await this.audit.record({
+      organizationId, actorUserId, action: 'billing.checkout.created', targetType: 'billing',
+      metadata: { provider: 'stripe', plan: plan.name, quantity },
+    });
     return { configured: true, url: session.url, sessionId: session.id };
   }
 
   /** Returns an explicit unconfigured result for a starter with no Stripe credentials. */
-  async portal(organizationId: string): Promise<PortalResult> {
+  async portal(organizationId: string, actorUserId: string): Promise<PortalResult> {
     if (!this.isStripeConfigured()) return { configured: false, url: null, reason: 'Stripe billing is not configured.' };
     const customer = await this.customers.findOneBy({ organizationId, provider: 'stripe' });
     if (!customer) throw new AppError('BILLING_CUSTOMER_NOT_FOUND', 'Start checkout before opening the billing portal.', 409);
@@ -81,6 +87,9 @@ export class BillingService {
     const session = await this.stripe().billingPortal.sessions.create({
       customer: customer.providerCustomerId, return_url: `${this.frontendUrl()}/organizations/${organizationId}/billing`,
       ...(configuration ? { configuration } : {}),
+    });
+    await this.audit.record({
+      organizationId, actorUserId, action: 'billing.portal.created', targetType: 'billing', metadata: { provider: 'stripe' },
     });
     return { configured: true, url: session.url };
   }

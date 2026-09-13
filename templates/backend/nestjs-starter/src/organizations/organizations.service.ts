@@ -9,6 +9,7 @@ import { Invitation } from './invitation.entity';
 import { Membership, OrganizationRole } from './membership.entity';
 import { Organization } from './organization.entity';
 import { SecureEmailService } from '../auth/secure-email.service';
+import { AuditLogService } from '../audit/audit-log.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -18,6 +19,7 @@ export class OrganizationsService {
   @InjectRepository(Invitation) private readonly invitations: Repository<Invitation>,
   private readonly dataSource: DataSource,
   private readonly secureEmail: SecureEmailService,
+  private readonly audit: AuditLogService,
  ) {}
  async create(user: User, name: string, slug?: string): Promise<Organization> {
   const derived = (slug ?? name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -39,10 +41,10 @@ export class OrganizationsService {
   return this.organizations.createQueryBuilder('organization').innerJoin(Membership, 'membership', 'membership.organization_id = organization.id').where('membership.user_id = :userId', { userId }).orderBy('organization.created_at', 'ASC').getMany();
  }
  async members(organizationId: string): Promise<Membership[]> { return this.memberships.findBy({ organizationId }); }
- async invite(organizationId: string, email: string, role: 'admin' | 'member'): Promise<void> {
+ async invite(organizationId: string, actorUserId: string, email: string, role: 'admin' | 'member'): Promise<void> {
   const normalizedEmail = this.normalizeEmail(email);
   const raw = randomBytes(48).toString('base64url');
-  let created: boolean;
+  let created: Invitation | null;
   try {
    created = await this.dataSource.transaction(async (manager) => {
     const invitations = manager.getRepository(Invitation);
@@ -50,16 +52,20 @@ export class OrganizationsService {
      .where('invitation.organization_id = :organizationId AND invitation.email = :email AND invitation.accepted_at IS NULL', { organizationId, email: normalizedEmail });
     if (this.dataSource.options.type !== 'sqljs') query.setLock('pessimistic_write');
     const existing = await query.getOne();
-    if (existing && existing.expiresAt > new Date()) return false;
+    if (existing && existing.expiresAt > new Date()) return null;
     if (existing) await invitations.remove(existing);
-    await invitations.save(invitations.create({ organizationId, email: normalizedEmail, role, tokenHash: this.hash(raw), acceptedAt: null, expiresAt: new Date(Date.now() + 7 * 86_400_000) }));
-    return true;
+    const invitation = await invitations.save(invitations.create({ organizationId, email: normalizedEmail, role, tokenHash: this.hash(raw), acceptedAt: null, expiresAt: new Date(Date.now() + 7 * 86_400_000) }));
+    await this.audit.record({
+     organizationId, actorUserId, action: 'organization.invitation.created', targetType: 'invitation', targetId: invitation.id,
+     metadata: { email: normalizedEmail, role },
+    }, manager);
+    return invitation;
    });
   } catch (error) {
    if (!this.isUniqueViolation(error)) throw error;
    const existing = await this.invitations.findOneBy({ organizationId, email: normalizedEmail, acceptedAt: IsNull() });
    if (!existing || existing.expiresAt <= new Date()) throw error;
-   created = false;
+   created = null;
   }
   if (created) await this.secureEmail.send(normalizedEmail, 'Organization invitation', `Use this one-time invitation token: ${raw}`);
  }
@@ -86,6 +92,10 @@ export class OrganizationsService {
     if (persistedMembership) return persistedMembership;
     throw new AppError('INVALID_INVITATION', 'The invitation is invalid or expired.', 400);
    }
+   await this.audit.record({
+    organizationId: invitation.organizationId, actorUserId: user.id, action: 'organization.invitation.accepted',
+    targetType: 'invitation', targetId: invitation.id, metadata: { role: invitation.role },
+   }, manager);
    return membership;
   });
  }
@@ -103,7 +113,14 @@ export class OrganizationsService {
    if (!actor || !['owner', 'admin'].includes(actor.role)) throw new AppError('ORGANIZATION_ACCESS_DENIED', 'You do not have permission for this organization.', 403);
    if (!target) throw new AppError('MEMBERSHIP_NOT_FOUND', 'Membership not found.', 404);
    if (target.role === 'owner' || role === 'owner') throw new AppError('OWNER_ROLE_PROTECTED', 'Owner role cannot be transferred through this endpoint.', 400);
-   await memberships.update(target.id, { role });
+   if (target.role !== role) {
+    const previousRole = target.role;
+    await memberships.update(target.id, { role });
+    await this.audit.record({
+     organizationId, actorUserId, action: 'organization.member.role_changed', targetType: 'user', targetId: target.userId,
+     metadata: { previousRole, newRole: role },
+    }, manager);
+   }
   });
  }
  async removeMember(organizationId: string, actorUserId: string, userId: string): Promise<void> {
@@ -120,6 +137,10 @@ export class OrganizationsService {
    if (!actor || !['owner', 'admin'].includes(actor.role)) throw new AppError('ORGANIZATION_ACCESS_DENIED', 'You do not have permission for this organization.', 403);
    if (!target) return;
    if (target.role === 'owner') throw new AppError('OWNER_ROLE_PROTECTED', 'The organization owner cannot be removed.', 400);
+   await this.audit.record({
+    organizationId, actorUserId, action: 'organization.member.removed', targetType: 'user', targetId: target.userId,
+    metadata: { role: target.role },
+   }, manager);
    await memberships.remove(target);
   });
  }
@@ -154,11 +175,16 @@ export class OrganizationsService {
     throw new AppError('OWNERSHIP_TARGET_NOT_ELIGIBLE', 'Ownership can only be transferred to an active organization member.', 409);
    }
 
+   const targetPreviousRole = target.role;
    await memberships.update(target.id, { role: 'owner' });
    const demoted = await memberships.update({ id: currentOwner.id, role: 'owner' }, { role: 'admin' });
    if (demoted.affected === 0) {
     throw new AppError('ORGANIZATION_ACCESS_DENIED', 'Only the current organization owner can transfer ownership.', 403);
    }
+   await this.audit.record({
+    organizationId, actorUserId, action: 'organization.ownership.transferred', targetType: 'user', targetId: targetUserId,
+    metadata: { previousOwnerNewRole: 'admin', newOwnerPreviousRole: targetPreviousRole },
+   }, manager);
   });
  }
  private async lockOrganization(organizations: Repository<Organization>, organizationId: string): Promise<void> {

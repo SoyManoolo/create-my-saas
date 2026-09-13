@@ -19,6 +19,7 @@ describe('BillingService', () => {
       get: jest.fn((key: string, fallback?: unknown) => values[key] ?? fallback),
       getOrThrow: jest.fn((key: string) => values[key]),
     };
+    const audit = { record: jest.fn(async (event) => event) };
     return {
       service: new BillingService(
         customers as unknown as Repository<BillingCustomer>,
@@ -28,20 +29,45 @@ describe('BillingService', () => {
         organizations as unknown as Repository<Organization>,
         dataSource as unknown as DataSource,
         config as unknown as ConfigService,
+        audit as never,
       ),
-      events, config,
+      events, config, audit, customers,
     };
   }
 
   it('makes an unconfigured portal explicit instead of returning a misleading link', async () => {
     const { service } = setup();
-    await expect(service.portal('fdafb779-347e-4ec0-b240-859f2e3985b4')).resolves.toEqual({ configured: false, url: null, reason: 'Stripe billing is not configured.' });
-    await expect(service.checkout('fdafb779-347e-4ec0-b240-859f2e3985b4', 'price_pro_monthly', 1)).resolves.toEqual({ configured: false, url: null, sessionId: null });
+    await expect(service.portal('fdafb779-347e-4ec0-b240-859f2e3985b4', 'actor-1')).resolves.toEqual({ configured: false, url: null, reason: 'Stripe billing is not configured.' });
+    await expect(service.checkout('fdafb779-347e-4ec0-b240-859f2e3985b4', 'price_pro_monthly', 1, 'actor-1')).resolves.toEqual({ configured: false, url: null, sessionId: null });
   });
 
   it('returns only allowlisted plans for an authenticated billing screen', () => {
     const { service } = setup({ STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test', STRIPE_PRICE_PLANS: '{"price_promonthly":{"name":"pro","entitlements":{"api_calls":1000}}}' });
     expect(service.configuration()).toMatchObject({ configured: true, plans: [{ priceId: 'price_promonthly', name: 'pro', entitlements: { api_calls: 1000 } }] });
+  });
+
+  it('audits Checkout and Portal without provider object identifiers', async () => {
+    const values = { STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test', STRIPE_PRICE_PLANS: '{"price_allowed":{"name":"pro","entitlements":{}}}', FRONTEND_URL: 'https://app.example' };
+    const { service, customers, audit } = setup(values);
+    customers.findOneBy.mockResolvedValue({ organizationId: 'organization-1', provider: 'stripe', providerCustomerId: 'cus_secret' });
+    const stripe = {
+      checkout: { sessions: { create: jest.fn(async () => ({ id: 'cs_secret', url: 'https://checkout.example' })) } },
+      billingPortal: { sessions: { create: jest.fn(async () => ({ id: 'bps_secret', url: 'https://portal.example' })) } },
+    };
+    (service as unknown as { stripe: () => unknown }).stripe = jest.fn(() => stripe);
+
+    await service.checkout('organization-1', 'price_allowed', 2, 'actor-1');
+    await service.portal('organization-1', 'actor-1');
+
+    expect(audit.record).toHaveBeenNthCalledWith(1, {
+      organizationId: 'organization-1', actorUserId: 'actor-1', action: 'billing.checkout.created', targetType: 'billing',
+      metadata: { provider: 'stripe', plan: 'pro', quantity: 2 },
+    });
+    expect(audit.record).toHaveBeenNthCalledWith(2, {
+      organizationId: 'organization-1', actorUserId: 'actor-1', action: 'billing.portal.created', targetType: 'billing',
+      metadata: { provider: 'stripe' },
+    });
+    expect(JSON.stringify(audit.record.mock.calls)).not.toMatch(/cus_secret|cs_secret|bps_secret/);
   });
 
   it('uses Stripe official signature verification over the unmodified raw body and deduplicates deliveries', async () => {

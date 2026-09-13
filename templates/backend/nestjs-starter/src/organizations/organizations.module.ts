@@ -7,5 +7,8 @@ import { Organization } from './organization.entity';
 import { OrganizationRoleGuard } from './organization-role.guard';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
-@Module({ imports: [AuthModule, TypeOrmModule.forFeature([Organization, Membership, Invitation])], controllers: [OrganizationsController], providers: [OrganizationsService, OrganizationRoleGuard], exports: [OrganizationsService, OrganizationRoleGuard, TypeOrmModule] })
+import { AuditLog } from '../audit/audit-log.entity';
+import { AuditLogController } from '../audit/audit-log.controller';
+import { AuditLogService } from '../audit/audit-log.service';
+@Module({ imports: [AuthModule, TypeOrmModule.forFeature([Organization, Membership, Invitation, AuditLog])], controllers: [OrganizationsController, AuditLogController], providers: [OrganizationsService, OrganizationRoleGuard, AuditLogService], exports: [OrganizationsService, OrganizationRoleGuard, AuditLogService, TypeOrmModule] })
 export class OrganizationsModule {}

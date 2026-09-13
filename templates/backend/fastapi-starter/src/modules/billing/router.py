@@ -37,13 +37,13 @@ async def get_configuration(org_id: UUID, user: User = Depends(get_current_user)
 @router.post("/organizations/{org_id}/checkout")
 async def create_checkout(org_id: UUID, body: CreateCheckout, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await require_billing_role(org_id, user, db)
-    return await BillingService(db).checkout(org_id, body.price_id, body.quantity)
+    return await BillingService(db).checkout(org_id, body.price_id, body.quantity, user.id)
 
 
 @router.post("/organizations/{org_id}/portal")
 async def create_portal(org_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await require_billing_role(org_id, user, db)
-    return await BillingService(db).portal(org_id)
+    return await BillingService(db).portal(org_id, user.id)
 
 
 @router.post("/webhooks/stripe", status_code=200)

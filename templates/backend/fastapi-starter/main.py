@@ -9,6 +9,7 @@ from src.modules.auth.oauth import router as oauth_router
 from src.modules.users.router import router as users_router
 from src.modules.organizations.router import router as organizations_router
 from src.modules.billing.router import router as billing_router
+from src.modules.audit.router import router as audit_router
 from src.core.config import settings
 from src.core.exceptions import AppError
 from src.core.exception_handlers import app_error_handler, request_validation_error_handler
@@ -77,3 +78,4 @@ app.include_router(oauth_router)
 app.include_router(users_router)
 app.include_router(organizations_router)
 app.include_router(billing_router)
+app.include_router(audit_router)
