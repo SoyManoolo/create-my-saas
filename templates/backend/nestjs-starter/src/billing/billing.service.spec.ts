@@ -39,6 +39,11 @@ describe('BillingService', () => {
     await expect(service.checkout('fdafb779-347e-4ec0-b240-859f2e3985b4', 'price_pro_monthly', 1)).resolves.toEqual({ configured: false, url: null, sessionId: null });
   });
 
+  it('returns only allowlisted plans for an authenticated billing screen', () => {
+    const { service } = setup({ STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test', STRIPE_PRICE_PLANS: '{"price_promonthly":{"name":"pro","entitlements":{"api_calls":1000}}}' });
+    expect(service.configuration()).toMatchObject({ configured: true, plans: [{ priceId: 'price_promonthly', name: 'pro', entitlements: { api_calls: 1000 } }] });
+  });
+
   it('uses Stripe official signature verification over the unmodified raw body and deduplicates deliveries', async () => {
     const key = 'sk_test_123456789012345678901234'; const secret = 'whsec_test_secret';
     const { service, events } = setup({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: secret, STRIPE_PRICE_PLANS: '{"price_pro_monthly":{"name":"pro","entitlements":{}}}' });

@@ -12,6 +12,7 @@ import { Subscription } from './subscription.entity';
 import { UsageRecord } from './usage-record.entity';
 
 type Plan = { name: string; entitlements: Record<string, number | null> };
+type PublicPlan = Plan & { priceId: string };
 type PortalResult = { configured: boolean; url: string | null; reason?: string };
 type UsageTotal = { metric: string; quantity: number };
 type UsageInput = { organizationId: string; metric: string; quantity: number; idempotencyKey: string; recordedAt?: Date };
@@ -49,8 +50,9 @@ export class BillingService {
     return Object.assign(subscription, { entitlements, usage });
   }
 
-  configuration(): { configured: boolean; provider: 'stripe'; usageMeterConfigured: boolean } {
-    return { configured: this.isStripeConfigured(), provider: 'stripe', usageMeterConfigured: Boolean(this.config.get<string>('STRIPE_USAGE_EVENT_NAME')?.trim()) };
+  configuration(): { configured: boolean; provider: 'stripe'; usageMeterConfigured: boolean; plans: PublicPlan[] } {
+    const plans = [...this.pricePlans()].map(([priceId, plan]) => ({ priceId, ...plan }));
+    return { configured: this.isStripeConfigured(), provider: 'stripe', usageMeterConfigured: Boolean(this.config.get<string>('STRIPE_USAGE_EVENT_NAME')?.trim()), plans };
   }
 
   async checkout(organizationId: string, priceId: string, quantity: number): Promise<{ configured: boolean; url: string | null; sessionId: string | null }> {

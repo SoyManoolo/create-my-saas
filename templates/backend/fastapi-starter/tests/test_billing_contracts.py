@@ -15,12 +15,13 @@ from src.modules.billing.service import BillingService
 class BillingContractTests(unittest.TestCase):
     def test_unconfigured_billing_is_explicit_and_free_entitlements_are_validated(self):
         service = BillingService(AsyncMock(), replace(settings, stripe_secret_key=None, stripe_webhook_secret=None, stripe_price_plans="{}", billing_free_entitlements='{"api_calls":100}'))
-        self.assertEqual(service.configuration(), {"configured": False, "provider": "stripe", "usageMeterConfigured": False})
+        self.assertEqual(service.configuration(), {"configured": False, "provider": "stripe", "usageMeterConfigured": False, "plans": []})
         self.assertEqual(service.free_entitlements(), {"api_calls": 100})
 
     def test_only_allowlisted_prices_are_accepted(self):
         service = BillingService(AsyncMock(), replace(settings, stripe_secret_key="sk_test", stripe_webhook_secret="whsec_test", stripe_price_plans='{"price_allowed":{"name":"pro","entitlements":{"api_calls":null}}}'))
         self.assertIn("price_allowed", service.price_plans())
+        self.assertEqual(service.configuration()["plans"], [{"priceId": "price_allowed", "name": "pro", "entitlements": {"api_calls": None}}])
         with self.assertRaises(AppError) as error:
             asyncio.run(service.checkout(uuid4(), "price_not_allowed", 1))
         self.assertEqual(error.exception.code, "BILLING_PRICE_NOT_AVAILABLE")

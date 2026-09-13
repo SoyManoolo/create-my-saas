@@ -31,7 +31,16 @@ class BillingService:
         self.config = config
 
     def configuration(self) -> dict[str, Any]:
-        return {"configured": self.is_stripe_configured(), "provider": "stripe", "usageMeterConfigured": bool(self.config.stripe_usage_event_name)}
+        plans = self.price_plans()
+        return {
+            "configured": self.is_stripe_configured(),
+            "provider": "stripe",
+            "usageMeterConfigured": bool(self.config.stripe_usage_event_name),
+            "plans": [
+                {"priceId": price_id, "name": plan["name"], "entitlements": plan["entitlements"]}
+                for price_id, plan in plans.items()
+            ],
+        }
 
     async def snapshot(self, organization_id: UUID) -> dict[str, Any]:
         subscription = await self._subscription(organization_id, create=False)
