@@ -74,6 +74,65 @@ jobs:
           test -f "$project/frontend/src/pages/index.astro"
           test -f "$project/backend/main.py"
 
+  generated-project-e2e:
+    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} browser E2E
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: fastapi
+            frontend: nextjs
+          - backend: fastapi
+            frontend: react-router
+          - backend: fastapi
+            frontend: astro
+          - backend: nestjs
+            frontend: nextjs
+          - backend: nestjs
+            frontend: react-router
+          - backend: nestjs
+            frontend: astro
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - name: Generate, install, boot, and exercise the generated project
+        run: >-
+          node scripts/e2e-generated-projects.mjs
+          --backend "${{ matrix.backend }}" --frontend "${{ matrix.frontend }}"
+
   nestjs:
     name: NestJS starter
     runs-on: ubuntu-latest
