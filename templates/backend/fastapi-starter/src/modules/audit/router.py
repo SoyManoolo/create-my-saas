@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import AppError
 from src.db.database import get_db
 from src.modules.auth.security.tokens import get_current_user
-from src.modules.organizations.router import require_role
+from src.modules.organizations.access import require_role
 from src.modules.users.model import AuditLog, MembershipRole, User
 
 router = APIRouter(prefix="/organizations", tags=["audit"])

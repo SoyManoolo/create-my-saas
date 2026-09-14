@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.database import get_db
 from src.modules.auth.security.tokens import get_current_user
 from src.modules.billing.service import BillingService
-from src.modules.organizations.router import require_role
+from src.modules.organizations.access import require_role
 from src.modules.users.model import MembershipRole, User
 
 router = APIRouter(prefix="/billing", tags=["billing"])

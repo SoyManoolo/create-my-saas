@@ -7,7 +7,8 @@ from uuid import uuid4
 
 from sqlalchemy.dialects import postgresql
 
-from src.modules.organizations import router
+from src.modules.organizations import invitations
+from src.modules.organizations.schemas import AcceptInvite, InviteCreate
 from src.modules.users.model import AuditLog, MembershipRole
 
 
@@ -49,14 +50,14 @@ class OrganizationInvitationTests(unittest.TestCase):
         invitation_id = uuid4()
         session = RecordingSession([invitation_id])
         user = SimpleNamespace(id=uuid4())
-        payload = router.InviteCreate(email="member@example.com", role=MembershipRole.MEMBER)
+        payload = InviteCreate(email="member@example.com", role=MembershipRole.MEMBER)
 
         with (
-            patch.object(router, "require_role", new=AsyncMock()),
-            patch.object(router, "opaque_token", return_value="raw-token"),
-            patch.object(router, "send_secure_email", new=AsyncMock()) as deliver,
+            patch.object(invitations, "require_role", new=AsyncMock()),
+            patch.object(invitations, "opaque_token", return_value="raw-token"),
+            patch.object(invitations, "send_secure_email", new=AsyncMock()) as deliver,
         ):
-            response = asyncio.run(router.invite(uuid4(), payload, user, session))
+            response = asyncio.run(invitations.invite(uuid4(), payload, user, session))
 
         statement = str(session.statements[0].compile(dialect=postgresql.dialect()))
         self.assertIn("ON CONFLICT (organization_id, email) WHERE accepted_at IS NULL AND cancelled_at IS NULL DO NOTHING", statement)
@@ -74,7 +75,7 @@ class OrganizationInvitationTests(unittest.TestCase):
         session = RecordingSession([SimpleNamespace(id=invitation_id, organization_id=organization_id, role="member"), None])
         user = SimpleNamespace(id=uuid4(), email="member@example.com")
 
-        asyncio.run(router.accept_invitation(router.AcceptInvite(token="raw-token"), user, session))
+        asyncio.run(invitations.accept_invitation(AcceptInvite(token="raw-token"), user, session))
 
         claim = str(session.statements[0].compile(dialect=postgresql.dialect()))
         membership = str(session.statements[1].compile(dialect=postgresql.dialect()))
@@ -88,11 +89,11 @@ class OrganizationInvitationTests(unittest.TestCase):
         ])
 
     def test_reaccepting_a_completed_invitation_is_a_noop_for_the_same_email(self):
-        now = router.utc_now()
+        now = invitations.utc_now()
         session = RecordingSession([None, SimpleNamespace(accepted_at=now, email="member@example.com")])
         user = SimpleNamespace(id=uuid4(), email="member@example.com")
 
-        asyncio.run(router.accept_invitation(router.AcceptInvite(token="raw-token"), user, session))
+        asyncio.run(invitations.accept_invitation(AcceptInvite(token="raw-token"), user, session))
 
         self.assertEqual(len(session.statements), 2)
         self.assertEqual(session.commits, 0)
