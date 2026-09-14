@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "description": "",
   "author": "",
+  "license": "MIT",
   "private": true,
   "packageManager": "pnpm@11.11.0",
-  "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

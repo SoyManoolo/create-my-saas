@@ -156,6 +156,7 @@ test('generates selected templates and omits local artifacts', (t) => {
   assert.equal(existsSync(join(destination, 'frontend', 'Dockerfile')), true);
   assert.equal(existsSync(join(destination, 'deployment', 'compose.yaml')), true);
   assert.equal(existsSync(join(destination, 'deployment', 'compose.dev.yaml')), true);
+  assert.match(readFileSync(join(destination, 'LICENSE'), 'utf8'), /^MIT License$/m);
 
   const deploymentCompose = readFileSync(join(destination, 'deployment', 'compose.yaml'), 'utf8');
   assert.match(deploymentCompose, /target: migrate/);

@@ -2,6 +2,7 @@
   "name": "create-my-saas",
   "version": "0.1.0",
   "description": "Generate a SaaS project from versioned backend and frontend starter templates.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "create-my-saas": "./packages/cli/bin/create-my-saas.js"

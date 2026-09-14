@@ -1,4 +1,5 @@
 import {
+  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -469,6 +470,11 @@ export function generateProject({
   try {
     mkdirSync(outputParentDirectory, { recursive: true });
     temporaryDirectory = mkdtempSync(join(outputParentDirectory, `.${basename(outputDirectory)}-`));
+
+    const templateLicense = join(templatesDirectory, 'LICENSE');
+    if (existsSync(templateLicense)) {
+      copyFileSync(templateLicense, join(temporaryDirectory, 'LICENSE'));
+    }
 
     if (backend) {
       copyTemplate(templatesDirectory, temporaryDirectory, 'backend', backend);

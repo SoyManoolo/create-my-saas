@@ -138,3 +138,11 @@ releases automatizadas forman parte del trabajo pendiente.
 - [FastAPI](./templates/backend/fastapi-starter/README.md), [NestJS](./templates/backend/nestjs-starter/README.md) y [Fastify](./templates/backend/fastify-starter/README.md)
 - [Next.js](./templates/frontend/nextjs-starter/README.md), [React Router](./templates/frontend/react-router-starter/README.md) y [Astro](./templates/frontend/astro-starter/README.md)
 
+## Licencia
+
+`create-my-saas`, su CLI y las plantillas incluidas se distribuyen bajo la
+[licencia MIT](./LICENSE). Los proyectos generados pueden usarse, modificarse y
+distribuirse, también como productos comerciales o propietarios, conservando el
+aviso de copyright y la licencia en las partes procedentes de estas plantillas.
+Las dependencias mantienen sus licencias respectivas.
+

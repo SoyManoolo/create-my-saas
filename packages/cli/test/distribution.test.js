@@ -37,6 +37,7 @@ test('the published package contains the executable and template catalog', () =>
   const packedPaths = new Set(packageDetails.files.map(({ path }) => path));
 
   assert.equal(packageDetails.name, 'create-my-saas');
+  assert.equal(packedPaths.has('LICENSE'), true);
   assert.equal(packedPaths.has('packages/cli/bin/create-my-saas.js'), true);
   assert.equal(packedPaths.has('packages/cli/src/catalog.js'), true);
   assert.equal(packedPaths.has('templates/backend/fastapi-starter/template.manifest.json'), true);
@@ -45,6 +46,7 @@ test('the published package contains the executable and template catalog', () =>
   assert.equal(packedPaths.has('templates/frontend/nextjs-starter/template.manifest.json'), true);
   assert.equal(packedPaths.has('templates/frontend/react-router-starter/template.manifest.json'), true);
   assert.equal(packedPaths.has('templates/frontend/astro-starter/template.manifest.json'), true);
+  assert.equal(packedPaths.has('templates/LICENSE'), true);
   assert.equal(packedPaths.has('docs/template-manifests.md'), true);
   assert.equal(
     [...packedPaths].some((path) => /(^|\/)(node_modules|\.next|\.venv|__pycache__|dist)(\/|$)|\.(pyc|tsbuildinfo)$/.test(path)),
