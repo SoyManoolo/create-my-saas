@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError, api } from "../lib/api.client";
-import { OAuthButtons } from "../components/oauth-buttons";
+import { OAuthButtons } from `../components/oauth-buttons`;
+import { captureAnalyticsEvent } from `../components/posthog-provider`;
 
 export function meta() { return [{ title: "Crear cuenta · SaaS starter" }]; }
 
@@ -16,6 +17,7 @@ export default function Register() {
     setError(undefined); setPending(true);
     try {
       await api.register({ name: String(data.get("name")), email: String(data.get("email")), password: String(data.get("password")) });
+      captureAnalyticsEvent("signup_requested");
       navigate("/login?registered=1", { replace: true });
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "No se ha podido crear la cuenta.");

@@ -34,6 +34,10 @@ El proxy selecciona el backend sin acoplar el navegador a su framework. `NEXT_PU
 
 El access token se conserva exclusivamente en memoria durante la pestaña. Al cargar, la aplicación intenta renovar la sesión con la refresh cookie; si falla, redirige al login.
 
+## Analítica de producto
+
+PostHog está incluido pero permanece inactivo hasta configurar `NEXT_PUBLIC_POSTHOG_KEY` y `NEXT_PUBLIC_POSTHOG_HOST` con la clave pública y el endpoint de ingestión del proyecto. La primera visita muestra un consentimiento explícito; hasta aceptarlo no se inicializa la captura. La integración desactiva autocapture y session replay, registra páginas, `signup_requested` y `user_signed_in`, e identifica al usuario con su ID interno estable, nunca con su email o nombre. Al cerrar sesión restablece esa identidad. Para añadir eventos de producto usa `captureAnalyticsEvent` desde `app/components/posthog-provider.tsx`; los pagos y otros eventos críticos deben enviarse después desde el backend.
+
 ## Extenderla
 
 El dashboard es deliberadamente neutral. Añade las entidades, vistas y navegación propias del producto sin modificar el núcleo de autenticación. Declara cualquier capacidad nueva del template en `template.manifest.json` y valida todos los manifests desde la raíz:

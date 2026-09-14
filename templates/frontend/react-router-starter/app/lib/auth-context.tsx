@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type User } from "./api.client";
+import { captureAnalyticsEvent, identifyAnalyticsUser, resetAnalyticsUser } from "../components/posthog-provider";
 
 type AuthStatus = "loading" | "authenticated" | "anonymous";
 type AuthContextValue = {
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessToken.current = session.accessToken;
       setUser(session.user);
       setStatus("authenticated");
+      identifyAnalyticsUser(session.user.id);
     } catch {
       if (attempt !== sessionAttempt.current) return;
       accessToken.current = null;
@@ -45,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     accessToken.current = session.accessToken;
     setUser(session.user);
     setStatus("authenticated");
+    identifyAnalyticsUser(session.user.id);
+    captureAnalyticsEvent("user_signed_in");
   }, []);
 
   const signOut = useCallback(async () => {
@@ -53,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessToken.current = null;
       setUser(null);
       setStatus("anonymous");
+      resetAnalyticsUser();
     }
   }, []);
 

@@ -41,3 +41,9 @@ input, textarea { width: 100%; border: 1px solid #aab5c9; border-radius: 0.45rem
   .site-header nav.open { display:grid; gap:.85rem; font-size:.95rem; }
   .site-header nav .text-button { text-align:left; }.auth-card { padding:1.5rem; }.oauth-actions { grid-template-columns:1fr; }
 }
+.analytics-consent { position: fixed; right: 1rem; bottom: 1rem; z-index: 20; max-width: 25rem; padding: 1rem; border: 1px solid #cbd5e1; border-radius: .75rem; background: #fff; box-shadow: 0 12px 30px rgb(15 23 42 / .18); color: #0f172a; }
+.analytics-consent p { margin: 0 0 .75rem; }
+.analytics-consent div { display: flex; gap: .5rem; justify-content: flex-end; }
+.analytics-consent button { border: 1px solid #64748b; border-radius: .4rem; padding: .45rem .7rem; background: #fff; color: #0f172a; cursor: pointer; }
+.analytics-consent button:last-child { border-color: #0f172a; background: #0f172a; color: #fff; }
+.analytics-consent-manage { position: fixed; right: 1rem; bottom: 1rem; z-index: 20; border: 1px solid #64748b; border-radius: .4rem; padding: .45rem .7rem; background: #fff; color: #0f172a; cursor: pointer; }

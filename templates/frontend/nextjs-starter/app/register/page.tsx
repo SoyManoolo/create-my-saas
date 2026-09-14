@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import styles from "../auth.module.css";
 import { api, ApiError } from "../lib/api";
 import { OAuthButtons } from "../components/oauth-buttons";
+import { captureAnalyticsEvent } from "../components/posthog-provider";
 
 export default function RegisterPage() {
   const [error, setError] = useState<string>();
@@ -22,6 +23,7 @@ export default function RegisterPage() {
     setError(undefined); setSubmitting(true);
     try {
       await api.register({ name: String(values.get("name")), email: String(values.get("email")), password });
+      captureAnalyticsEvent("signup_requested");
       setComplete(true);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "No se ha podido crear la cuenta.");

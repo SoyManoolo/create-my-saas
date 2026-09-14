@@ -1,5 +1,6 @@
 type User = { id: string; name: string; email: string; emailVerified: boolean };
 type Session = { accessToken: string; user: User };
+import { captureAnalyticsEvent, identifyAnalyticsUser, resetAnalyticsUser } from "./posthog";
 
 const baseUrl = (import.meta.env?.PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const csrfCookieName = import.meta.env?.PUBLIC_CSRF_COOKIE_NAME ?? "csrf_token";
@@ -117,7 +118,9 @@ async function request<T>(path: string, init: Omit<RequestInit, "body"> & { body
 async function restoreSession() {
   const result = await request<Record<string, unknown>>("/auth/refresh", { method: "POST" });
   accessToken = String(result.accessToken ?? result.access_token);
-  return { accessToken, user: user(result.user as Record<string, unknown>) } satisfies Session;
+  const session = { accessToken, user: user(result.user as Record<string, unknown>) } satisfies Session;
+  identifyAnalyticsUser(session.user.id);
+  return session;
 }
 
 function setStatus(target: Element | null, message: string, error = false) {
@@ -155,7 +158,7 @@ function bindForms() {
         accessToken = String(result.accessToken ?? result.access_token);
         window.location.assign("/app/"); return;
       }
-      if (kind === "register") { await request("/auth/register", { method: "POST", body: { name: values.get("name"), email: values.get("email"), password: values.get("password") } }); setStatus(status, "Revisa tu correo para verificar la cuenta antes de iniciar sesión."); }
+      if (kind === "register") { await request("/auth/register", { method: "POST", body: { name: values.get("name"), email: values.get("email"), password: values.get("password") } }); captureAnalyticsEvent("signup_requested"); setStatus(status, "Revisa tu correo para verificar la cuenta antes de iniciar sesión."); }
       if (kind === "forgot") { await request("/auth/password/reset/request", { method: "POST", body: { email: values.get("email") } }); setStatus(status, "Si existe una cuenta con ese correo, recibirás un enlace de restablecimiento."); }
       if (kind === "reset") { await request("/auth/password/reset/confirm", { method: "POST", body: { token: new URLSearchParams(location.search).get("token"), newPassword: values.get("password") } }); setStatus(status, "Contraseña actualizada. Ya puedes iniciar sesión."); }
     } catch (cause) { setStatus(status, cause instanceof Error ? cause.message : "La operación no se ha podido completar.", true); }
@@ -186,7 +189,7 @@ async function bindProtectedPage() {
 if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", () => {
   bindForms(); bindOAuth(); void bindProtectedPage();
   document.querySelectorAll<HTMLElement>("[data-mobile-menu-button]").forEach((button) => button.addEventListener("click", () => document.querySelector("[data-mobile-menu]")?.classList.toggle("open")));
-  document.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((button) => button.addEventListener("click", async () => { try { await request("/auth/logout", { method: "POST" }); } finally { accessToken = null; window.location.assign("/login/"); } }));
+  document.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((button) => button.addEventListener("click", async () => { try { await request("/auth/logout", { method: "POST" }); } finally { accessToken = null; resetAnalyticsUser(); window.location.assign("/login/"); } }));
   document.querySelectorAll<HTMLButtonElement>("[data-resend-verification]").forEach((button) => button.addEventListener("click", async () => { const status = document.querySelector("[data-account-status]"); try { if (!accessToken) throw new Error("La sesión ha caducado. Inicia sesión de nuevo."); await request("/auth/email/resend", { method: "POST", token: accessToken }); setStatus(status, "Hemos enviado un nuevo enlace de verificación."); } catch (cause) { setStatus(status, cause instanceof Error ? cause.message : "No se ha podido reenviar el enlace.", true); } }));
   if (document.querySelector("[data-oauth-callback]")) void restoreSession().then(() => window.location.replace("/app/")).catch(() => setStatus(document.querySelector("[data-oauth-status]"), "No se ha podido completar el inicio de sesión.", true));
   if (document.querySelector("[data-verify-email]")) { const token = new URLSearchParams(location.search).get("token"); const status = document.querySelector("[data-verify-status]"); if (!token) setStatus(status, "El enlace de verificación no es válido.", true); else void request("/auth/email/verify", { method: "POST", body: { token } }).then(() => setStatus(status, "Tu correo se ha verificado correctamente.")).catch((cause) => setStatus(status, cause instanceof Error ? cause.message : "No se ha podido verificar el correo.", true)); }

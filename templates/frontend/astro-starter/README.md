@@ -4,11 +4,11 @@ Plantilla Astro para la parte pública y el área protegida ligera de un SaaS: l
 
 ## Arranque
 
-```bash
+"`bash
 cp .env.example .env
 pnpm install --frozen-lockfile
 pnpm dev
-```
+"`
 
 Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap. El generador rellena `API_PROXY_TARGET` para que Astro reenvíe `/auth` y `/users` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una ruta del mismo origen que reenvíe esos prefijos; esto conserva el alcance de las cookies `HttpOnly` y CSRF.
 
@@ -25,9 +25,13 @@ Requiere un backend que implemente el contrato común de autenticación, CSRF y 
 
 Para añadir organizaciones y Stripe Billing, genera Astro con `--feature billing`. Esa característica sólo es compatible con FastAPI y NestJS; sustituye esta versión ligera por las rutas y proxies de facturación.
 
+## Analítica de producto
+
+PostHog está incluido pero permanece inactivo hasta configurar `PUBLIC_POSTHOG_KEY` y `PUBLIC_POSTHOG_HOST` con la clave pública y el endpoint de ingestión del proyecto. La primera visita muestra un consentimiento explícito; hasta aceptarlo no se inicializa la captura. La integración desactiva autocapture y session replay, registra páginas y `signup_requested`, e identifica al usuario con su ID interno estable, nunca con su email o nombre. Al cerrar sesión restablece esa identidad. Para añadir eventos de producto usa `captureAnalyticsEvent` desde `src/scripts/posthog.ts`; los pagos y otros eventos críticos deben enviarse después desde el backend.
+
 ## Verificación
 
-```bash
+"`bash
 pnpm check
 pnpm build
-```
+"`

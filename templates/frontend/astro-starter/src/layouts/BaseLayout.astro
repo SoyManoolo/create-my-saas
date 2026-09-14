@@ -45,6 +45,8 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
     </footer>
     <script>
       import '../scripts/auth';
+      import { initializePostHog } from '../scripts/posthog';
+      document.addEventListener('DOMContentLoaded', initializePostHog);
     </script>
   </body>
 </html>

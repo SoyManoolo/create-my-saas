@@ -36,6 +36,10 @@ La plantilla consume las rutas canónicas:
 
 Tras cargar la aplicación se intenta `POST /auth/refresh`; si falla, las rutas protegidas redirigen al login. El proxy de `app/routes/api-proxy.ts` está limitado a las rutas de API declaradas y mantiene el valor de `API_PROXY_TARGET` exclusivamente en el servidor.
 
+## Analítica de producto
+
+PostHog está incluido pero permanece inactivo hasta configurar `VITE_POSTHOG_KEY` y `VITE_POSTHOG_HOST` con la clave pública y el endpoint de ingestión del proyecto. La primera visita muestra un consentimiento explícito; hasta aceptarlo no se inicializa la captura. La integración desactiva autocapture y session replay, registra páginas, `signup_requested` y `user_signed_in`, e identifica al usuario con su ID interno estable, nunca con su email o nombre. Al cerrar sesión restablece esa identidad. Para añadir eventos de producto usa `captureAnalyticsEvent` desde `app/components/posthog-provider.tsx`; los pagos y otros eventos críticos deben enviarse después desde el backend.
+
 ## Extenderla
 
 El dashboard es deliberadamente neutral: añade las entidades, vistas y navegación de tu producto sin cambiar el núcleo de autenticación. Si añades capacidades al starter, actualiza `template.manifest.json` y valida todos los manifests desde la raíz:

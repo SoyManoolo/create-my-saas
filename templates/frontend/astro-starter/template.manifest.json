@@ -18,6 +18,8 @@
     "seo.robots",
     "seo.sitemap",
     "ui.interactive-islands",
+    "analytics.product",
+    "analytics.consent",
     "auth.browser-sessions",
     "auth.csrf",
     "auth.password-recovery",
