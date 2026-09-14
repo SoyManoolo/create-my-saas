@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, R
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { AuthRateLimit } from '../common/rate-limit/auth-rate-limit.decorator';
 import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
 import { AppError } from '../common/errors/app.error';
 import { UserPublicDto } from '../users/dto/user-public.dto';
@@ -17,9 +18,9 @@ import { VerifyEmailDto } from './dto/verification.dto';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService, private readonly config: ConfigService) {}
-  @Post('register') @UseGuards(RateLimitGuard)
+  @Post('register') @AuthRateLimit('register') @UseGuards(RateLimitGuard)
   register(@Body() body: RegisterDto): Promise<UserPublicDto> { return this.authService.register(body); }
-  @Post('login') @HttpCode(HttpStatus.OK) @UseGuards(RateLimitGuard)
+  @Post('login') @HttpCode(HttpStatus.OK) @AuthRateLimit('login') @UseGuards(RateLimitGuard)
   async login(@Body() body: LoginDto, @Req() req: Request, @Res({ passthrough: true }) response: Response): Promise<AuthenticationResult> {
     return this.setBrowserSession(response, await this.authService.login(body, this.metadata(req)));
   }
@@ -37,9 +38,9 @@ export class AuthController {
   }
   @Post('password/change') @HttpCode(HttpStatus.NO_CONTENT) @UseGuards(JwtAuthGuard)
   async changePassword(@CurrentUser() user: User, @Body() body: ChangePasswordDto): Promise<void> { await this.authService.changePassword(user, body.currentPassword, body.newPassword); }
-  @Post('password/reset/request') @HttpCode(HttpStatus.NO_CONTENT) @UseGuards(RateLimitGuard)
+  @Post('password/reset/request') @HttpCode(HttpStatus.NO_CONTENT) @AuthRateLimit('password-reset-request') @UseGuards(RateLimitGuard)
   async requestReset(@Body() body: RequestPasswordResetDto): Promise<void> { await this.authService.requestPasswordReset(body.email.toLowerCase()); }
-  @Post('password/reset/confirm') @HttpCode(HttpStatus.NO_CONTENT) @UseGuards(RateLimitGuard)
+  @Post('password/reset/confirm') @HttpCode(HttpStatus.NO_CONTENT) @AuthRateLimit('password-reset-confirm') @UseGuards(RateLimitGuard)
   async reset(@Body() body: ResetPasswordDto): Promise<void> { await this.authService.resetPassword(body.token, body.newPassword); }
   @Post('email/verify') @HttpCode(HttpStatus.NO_CONTENT) @UseGuards(RateLimitGuard)
   async verify(@Body() body: VerifyEmailDto): Promise<void> { await this.authService.verifyEmail(body.token); }

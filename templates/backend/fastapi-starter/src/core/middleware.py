@@ -13,6 +13,24 @@ try:
 except ImportError:  # Redis is an optional extra of this template.
     redis_from_url = None
 
+SENSITIVE_AUTH_BUCKETS = {
+    ("POST", "/auth/register"): "auth:register",
+    ("POST", "/auth/login"): "auth:login",
+    ("POST", "/auth/password/reset/request"): "auth:password-reset-request",
+    ("POST", "/auth/password/reset/confirm"): "auth:password-reset-confirm",
+}
+
+
+def _rate_limit_policy(request: Request) -> tuple[str, int, int]:
+    auth_bucket = SENSITIVE_AUTH_BUCKETS.get((request.method, request.url.path))
+    if auth_bucket:
+        return auth_bucket, settings.auth_rate_limit_requests, settings.auth_rate_limit_window_seconds
+    return (
+        f"route:{request.method}:{request.url.path}",
+        settings.rate_limit_requests,
+        settings.rate_limit_window_seconds,
+    )
+
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -46,12 +64,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         # ProxyHeadersMiddleware rewrites client only when its immediate peer is
         # listed in TRUSTED_PROXY_IPS. Otherwise this remains the socket address.
-        key = request.client.host if request.client else "unknown"
+        bucket_name, limit, window_seconds = _rate_limit_policy(request)
+        client_ip = request.client.host if request.client else "unknown"
+        key = f"{bucket_name}:{client_ip}"
         if settings.environment in {"production", "staging"} and not self.redis:
             return JSONResponse(status_code=503, content={"error": {"code": "RATE_LIMIT_UNAVAILABLE", "message": "Request limiting is temporarily unavailable."}}, headers={"Retry-After": "60"})
         if self.redis:
             # Wall-clock windows make a Redis key stable across processes and hosts.
-            redis_key = f"{settings.rate_limit_prefix}:{key}:{int(time() // settings.rate_limit_window_seconds)}"
+            redis_key = f"{settings.rate_limit_prefix}:{key}:{int(time() // window_seconds)}"
             try:
                 # The expiry is established atomically with the increment. A
                 # process crash cannot leave an unbounded counter behind.
@@ -61,20 +81,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "return count",
                     1,
                     redis_key,
-                    settings.rate_limit_window_seconds,
+                    window_seconds,
                 )
             except Exception:
                 if settings.environment in {"production", "staging"}:
                     return JSONResponse(status_code=503, content={"error": {"code": "RATE_LIMIT_UNAVAILABLE", "message": "Request limiting is temporarily unavailable."}}, headers={"Retry-After": "60"})
                 self.redis = None
                 return await self.dispatch(request, call_next)
-            if count > settings.rate_limit_requests:
-                return JSONResponse(status_code=429, content={"error": {"code": "RATE_LIMITED", "message": "Too many requests."}}, headers={"Retry-After": str(settings.rate_limit_window_seconds)})
+            if count > limit:
+                return JSONResponse(status_code=429, content={"error": {"code": "RATE_LIMITED", "message": "Too many requests."}}, headers={"Retry-After": str(window_seconds)})
             return await call_next(request)
-        now = monotonic(); bucket = self.requests[key]; cutoff = now - settings.rate_limit_window_seconds
+        now = monotonic(); bucket = self.requests[key]; cutoff = now - window_seconds
         while bucket and bucket[0] <= cutoff: bucket.popleft()
-        if len(bucket) >= settings.rate_limit_requests:
-            return JSONResponse(status_code=429, content={"error": {"code": "RATE_LIMITED", "message": "Too many requests."}}, headers={"Retry-After": str(settings.rate_limit_window_seconds)})
+        if len(bucket) >= limit:
+            return JSONResponse(status_code=429, content={"error": {"code": "RATE_LIMITED", "message": "Too many requests."}}, headers={"Retry-After": str(window_seconds)})
         bucket.append(now); return await call_next(request)
 
 

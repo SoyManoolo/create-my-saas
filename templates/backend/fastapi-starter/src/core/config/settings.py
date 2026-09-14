@@ -30,6 +30,8 @@ class Settings:
     rate_limit_enabled: bool = _bool("RATE_LIMIT_ENABLED", True)
     rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", os.getenv("RATE_LIMIT_MAX", "30")))
     rate_limit_window_seconds: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    auth_rate_limit_requests: int = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "5"))
+    auth_rate_limit_window_seconds: int = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))
     rate_limit_prefix: str = os.getenv("RATE_LIMIT_PREFIX", "rate-limit").strip() or "rate-limit"
     trust_proxy_headers: bool = _bool("TRUST_PROXY_HEADERS")
     trusted_proxy_ips_raw: str = os.getenv("TRUSTED_PROXY_IPS", "")
@@ -61,8 +63,13 @@ class Settings:
         database_scheme = urlparse(self.database_url).scheme
         if database_scheme != "postgresql+asyncpg":
             raise RuntimeError("DATABASE_URL must use the postgresql+asyncpg driver.")
-        if self.rate_limit_requests < 1 or self.rate_limit_window_seconds < 1:
-            raise RuntimeError("RATE_LIMIT_REQUESTS and RATE_LIMIT_WINDOW_SECONDS must be positive integers.")
+        if min(
+            self.rate_limit_requests,
+            self.rate_limit_window_seconds,
+            self.auth_rate_limit_requests,
+            self.auth_rate_limit_window_seconds,
+        ) < 1:
+            raise RuntimeError("Rate-limit request counts and windows must be positive integers.")
         if bool(self.stripe_secret_key) != bool(self.stripe_webhook_secret):
             raise RuntimeError("STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must be configured together.")
         if self.stripe_webhook_tolerance_seconds < 1:

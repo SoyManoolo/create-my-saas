@@ -27,6 +27,8 @@ const environment = z.object({
   RATE_LIMIT_ENABLED: environmentBoolean('true'),
   RATE_LIMIT_REQUESTS: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  AUTH_RATE_LIMIT_REQUESTS: z.coerce.number().int().positive().default(5),
+  AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_PREFIX: z.string().trim().min(1).default('rate-limit'),
   REDIS_URL: z.string().url().optional(),
   TRUST_PROXY_HEADERS: environmentBoolean(),

@@ -81,7 +81,9 @@ const config: Config = {
   REFRESH_COOKIE_NAME: 'refresh_token', CSRF_COOKIE_NAME: 'csrf_token',
   COOKIE_SECURE: false, COOKIE_SAME_SITE: 'lax', origins: ['http://localhost:3000'],
   EMAIL_DELIVERY_URL: undefined, EMAIL_DELIVERY_TOKEN: undefined,
-  RATE_LIMIT_ENABLED: true, RATE_LIMIT_REQUESTS: 30, RATE_LIMIT_WINDOW_SECONDS: 60, RATE_LIMIT_PREFIX: 'rate-limit', REDIS_URL: undefined,
+  RATE_LIMIT_ENABLED: true, RATE_LIMIT_REQUESTS: 30, RATE_LIMIT_WINDOW_SECONDS: 60,
+  AUTH_RATE_LIMIT_REQUESTS: 5, AUTH_RATE_LIMIT_WINDOW_SECONDS: 60,
+  RATE_LIMIT_PREFIX: 'rate-limit', REDIS_URL: undefined,
   TRUST_PROXY_HEADERS: false, TRUSTED_PROXY_IPS: '', trustedProxyIps: [],
   OAUTH_ENABLED: false,
   OAUTH_GOOGLE_CLIENT_ID: undefined, OAUTH_GOOGLE_CLIENT_SECRET: undefined, OAUTH_GOOGLE_AUTHORIZATION_URL: undefined,
@@ -208,19 +210,37 @@ test('readiness returns structured 503 responses for PostgreSQL and Redis failur
   }
 });
 
-test('rate limiting returns 429 with Retry-After and fails closed in protected environments', async () => {
-  const app = await createApp({ config: { ...config, RATE_LIMIT_REQUESTS: 1 }, repository: new InMemorySessions(), databaseReady: async () => {} });
+test('sensitive authentication routes use stricter independent buckets', async () => {
+  const app = await createApp({
+    config: { ...config, AUTH_RATE_LIMIT_REQUESTS: 1, AUTH_RATE_LIMIT_WINDOW_SECONDS: 120 },
+    repository: new InMemorySessions(),
+    databaseReady: async () => {},
+  });
   try {
-    const first = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'first@example.com', name: 'First', password: 'password1' } });
-    const limited = await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'second@example.com', name: 'Second', password: 'password1' } });
-    assert.equal(first.statusCode, 201);
-    assert.equal(limited.statusCode, 429);
-    assert.equal(limited.headers['retry-after'], '60');
-    assert.deepEqual(limited.json(), { error: { code: 'RATE_LIMITED', message: 'Too many requests.' } });
+    const ordinaryFirst = await app.inject({ method: 'GET', url: '/users/me' });
+    const ordinarySecond = await app.inject({ method: 'GET', url: '/users/me' });
+    assert.equal(ordinaryFirst.statusCode, 401);
+    assert.equal(ordinarySecond.statusCode, 401);
+
+    for (const url of [
+      '/auth/register',
+      '/auth/login',
+      '/auth/password/reset/request',
+      '/auth/password/reset/confirm',
+    ]) {
+      const first = await app.inject({ method: 'POST', url, payload: {} });
+      const limited = await app.inject({ method: 'POST', url, payload: {} });
+      assert.equal(first.statusCode, 400, url);
+      assert.equal(limited.statusCode, 429, url);
+      assert.equal(limited.headers['retry-after'], '120', url);
+      assert.deepEqual(limited.json(), { error: { code: 'RATE_LIMITED', message: 'Too many requests.' } });
+    }
   } finally {
     await app.close();
   }
+});
 
+test('rate limiting fails closed in protected environments', async () => {
   const protectedApp = await createApp({ config: { ...config, environment: 'staging' }, repository: new InMemorySessions(), databaseReady: async () => {} });
   try {
     const unavailable = await protectedApp.inject({ method: 'POST', url: '/auth/register', payload: { email: 'unavailable@example.com', name: 'Unavailable', password: 'password1' } });

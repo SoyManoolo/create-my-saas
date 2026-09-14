@@ -1,14 +1,64 @@
 import unittest
 import asyncio
 from unittest.mock import patch
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from main import app
+from src.core import middleware as middleware_module
+from src.core.config.settings import Settings
+from src.core.middleware import RateLimitMiddleware
 from src.modules.auth.security.tokens import decode_access_token, encode_access_token, token_hash
 from src.modules.auth.oauth import exchange_profile
 from src.modules.users.schemas import ChangePassword, ResetPasswordConfirm, UserRegister
 
 
 class SecurityContractTests(unittest.TestCase):
+    def setUp(self):
+        self.rate_limit_patch = patch.object(
+            middleware_module,
+            "settings",
+            Settings(**{**middleware_module.settings.__dict__, "rate_limit_enabled": False}),
+        )
+        self.rate_limit_patch.start()
+
+    def tearDown(self):
+        self.rate_limit_patch.stop()
+
+    def test_sensitive_authentication_routes_use_stricter_independent_buckets(self):
+        limited_app = FastAPI()
+        limited_app.add_middleware(RateLimitMiddleware)
+        for path in (
+            "/auth/register",
+            "/auth/login",
+            "/auth/password/reset/request",
+            "/auth/password/reset/confirm",
+            "/ordinary",
+        ):
+            limited_app.add_api_route(path, lambda: {"ok": True}, methods=["POST"])
+
+        configured = Settings(
+            rate_limit_enabled=True,
+            rate_limit_requests=30,
+            rate_limit_window_seconds=60,
+            auth_rate_limit_requests=1,
+            auth_rate_limit_window_seconds=120,
+            redis_url=None,
+        )
+        with patch.object(middleware_module, "settings", configured), TestClient(limited_app) as client:
+            self.assertEqual(client.post("/ordinary").status_code, 200)
+            self.assertEqual(client.post("/ordinary").status_code, 200)
+            for path in (
+                "/auth/register",
+                "/auth/login",
+                "/auth/password/reset/request",
+                "/auth/password/reset/confirm",
+            ):
+                self.assertEqual(client.post(path).status_code, 200, path)
+                limited = client.post(path)
+                self.assertEqual(limited.status_code, 429, path)
+                self.assertEqual(limited.headers["retry-after"], "120", path)
+                self.assertEqual(limited.json()["error"]["code"], "RATE_LIMITED", path)
+
     def test_access_token_has_access_type_and_subject(self):
         payload = decode_access_token(encode_access_token("user-123"))
         self.assertEqual(payload["sub"], "user-123")

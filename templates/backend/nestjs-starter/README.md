@@ -138,7 +138,9 @@ peticiones es la del socket de conexión.
 
 `RATE_LIMIT_ENABLED=true`, `RATE_LIMIT_REQUESTS=30`,
 `RATE_LIMIT_WINDOW_SECONDS=60` y `RATE_LIMIT_PREFIX=rate-limit` controlan el
-límite de las rutas protegidas. En `development`, si Redis no responde, hay un
+límite general. Login, registro, solicitud de recuperación y confirmación usan
+buckets independientes por IP con `AUTH_RATE_LIMIT_REQUESTS=5` y
+`AUTH_RATE_LIMIT_WINDOW_SECONDS=60`. En `development`, si Redis no responde, hay un
 fallback por proceso. En `staging` y `production` configura
 `REDIS_URL=rediss://...` y deja el límite activado: la aplicación rechaza al
 arrancar una URL no TLS o un limitador desactivado. Una indisponibilidad de

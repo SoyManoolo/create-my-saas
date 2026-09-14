@@ -29,7 +29,10 @@ staging and production; the process refuses to start without it.
 Requests except `GET /health` and `GET /ready` are limited by client IP, HTTP method and route.
 The shared settings are `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` (default
 `30`), `RATE_LIMIT_WINDOW_SECONDS` (default `60`), `RATE_LIMIT_PREFIX`, and
-`REDIS_URL`. Redis is used for a counter shared by every worker; local
+`REDIS_URL`. Login, registration, password-reset requests, and reset
+confirmation each use an independent bucket with
+`AUTH_RATE_LIMIT_REQUESTS` (default `5`) and
+`AUTH_RATE_LIMIT_WINDOW_SECONDS` (default `60`). Redis is used for a counter shared by every worker; local
 development and test can fall back to memory if Redis is unavailable. Staging
 and production require `RATE_LIMIT_ENABLED=true` and a TLS `rediss://` URL;
 an unavailable store returns `503 RATE_LIMIT_UNAVAILABLE`, while an exceeded

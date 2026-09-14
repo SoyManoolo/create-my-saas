@@ -3,6 +3,7 @@ import { connect as connectTls } from 'node:tls';
 import type { Config } from './config.js';
 
 type Bucket = number[];
+type RateLimitPolicy = { limit: number; windowSeconds: number };
 export type RateLimitResult = 'allowed' | 'limited' | 'unavailable';
 
 /** Redis counters are shared by every API process; memory is only a local fallback. */
@@ -11,17 +12,19 @@ export class RateLimiter {
 
   constructor(private readonly config: Config) {}
 
-  async consume(key: string): Promise<RateLimitResult> {
+  async consume(key: string, policy?: RateLimitPolicy): Promise<RateLimitResult> {
     if (!this.config.RATE_LIMIT_ENABLED) return 'allowed';
-    const redis = await this.consumeRedis(key);
+    const limit = policy?.limit ?? this.config.RATE_LIMIT_REQUESTS;
+    const windowSeconds = policy?.windowSeconds ?? this.config.RATE_LIMIT_WINDOW_SECONDS;
+    const redis = await this.consumeRedis(key, limit, windowSeconds);
     if (redis !== null) return redis ? 'allowed' : 'limited';
     if (this.config.environment === 'production' || this.config.environment === 'staging') return 'unavailable';
 
     const now = Date.now();
-    const cutoff = now - this.config.RATE_LIMIT_WINDOW_SECONDS * 1_000;
+    const cutoff = now - windowSeconds * 1_000;
     const bucket = this.buckets.get(key) ?? [];
     while (bucket[0] !== undefined && bucket[0] <= cutoff) bucket.shift();
-    if (bucket.length >= this.config.RATE_LIMIT_REQUESTS) return 'limited';
+    if (bucket.length >= limit) return 'limited';
     bucket.push(now);
     this.buckets.set(key, bucket);
     return 'allowed';
@@ -66,16 +69,16 @@ export class RateLimiter {
     }
   }
 
-  private async consumeRedis(key: string): Promise<boolean | null> {
+  private async consumeRedis(key: string, limit: number, windowSeconds: number): Promise<boolean | null> {
     if (!this.config.REDIS_URL) return null;
     try {
       const target = new URL(this.config.REDIS_URL);
       if (!['redis:', 'rediss:'].includes(target.protocol)) return null;
-      const window = Math.floor(Date.now() / (this.config.RATE_LIMIT_WINDOW_SECONDS * 1_000));
+      const window = Math.floor(Date.now() / (windowSeconds * 1_000));
       const redisKey = `${this.config.RATE_LIMIT_PREFIX}:${key}:${window}`;
       const command = (parts: string[]) => `*${parts.length}\r\n${parts.map((part) => `$${Buffer.byteLength(part)}\r\n${part}\r\n`).join('')}`;
       const script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; return count";
-      const increment = command(['EVAL', script, '1', redisKey, String(this.config.RATE_LIMIT_WINDOW_SECONDS)]);
+      const increment = command(['EVAL', script, '1', redisKey, String(windowSeconds)]);
       const reply = await new Promise<string>((resolve, reject) => {
         const socket = target.protocol === 'rediss:'
           ? connectTls({ host: target.hostname, port: Number(target.port || 6380), servername: target.hostname })
@@ -102,7 +105,7 @@ export class RateLimiter {
           socket.write(password ? `${command(username ? ['AUTH', username, password] : ['AUTH', password])}${increment}` : increment);
         });
       });
-      return Number(reply) <= this.config.RATE_LIMIT_REQUESTS;
+      return Number(reply) <= limit;
     } catch {
       return null;
     }

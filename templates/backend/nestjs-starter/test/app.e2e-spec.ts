@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -37,6 +38,30 @@ describe('AppController (e2e)', () => {
     expect(response.headers['x-frame-options']).toBe('DENY');
     expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(response.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('uses stricter independent buckets for sensitive authentication routes', async () => {
+    const config = app.get(ConfigService);
+    config.set('RATE_LIMIT_ENABLED', true);
+    config.set('RATE_LIMIT_REQUESTS', 30);
+    config.set('RATE_LIMIT_WINDOW_SECONDS', 60);
+    config.set('AUTH_RATE_LIMIT_REQUESTS', 1);
+    config.set('AUTH_RATE_LIMIT_WINDOW_SECONDS', 120);
+
+    await request(app.getHttpServer()).post('/auth/refresh').send({}).expect(403);
+    await request(app.getHttpServer()).post('/auth/refresh').send({}).expect(403);
+
+    for (const path of [
+      '/auth/register',
+      '/auth/login',
+      '/auth/password/reset/request',
+      '/auth/password/reset/confirm',
+    ]) {
+      await request(app.getHttpServer()).post(path).send({}).expect(400);
+      const limited = await request(app.getHttpServer()).post(path).send({}).expect(429);
+      expect(limited.headers['retry-after']).toBe('120');
+      expect(limited.body.error.code).toBe('RATE_LIMITED');
+    }
   });
 
   it('registers, authenticates and returns the current user', async () => {

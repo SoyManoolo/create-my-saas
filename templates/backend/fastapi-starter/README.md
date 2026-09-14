@@ -35,6 +35,12 @@ dependencies return a structured `503 SERVICE_NOT_READY` response.
 `X-Forwarded-Proto` only from those peers, and the rate limiter uses that validated client
 IP. Do not enable it with a wildcard.
 
+The general limiter defaults to 30 requests per 60 seconds for each client IP,
+method, and route. Login, registration, password-reset requests, and reset
+confirmation each use an independent stricter bucket configured with
+`AUTH_RATE_LIMIT_REQUESTS` (default `5`) and
+`AUTH_RATE_LIMIT_WINDOW_SECONDS` (default `60`).
+
 ## Integration boundaries
 
 Email endpoints never return opaque tokens. Configure `EMAIL_DELIVERY_URL` and

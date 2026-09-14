@@ -6,6 +6,7 @@ from uuid import uuid4
 import jwt
 from fastapi.testclient import TestClient
 
+from src.core import middleware as middleware_module
 from src.core.config import settings
 from src.db.database import get_db
 from main import app
@@ -72,6 +73,12 @@ class AuthenticationApiTests(unittest.TestCase):
     }
 
     def setUp(self):
+        self.rate_limit_patch = patch.object(
+            middleware_module,
+            "settings",
+            type(settings)(**{**settings.__dict__, "rate_limit_enabled": False}),
+        )
+        self.rate_limit_patch.start()
         self.db = InMemorySession()
         self.users = InMemoryUserRepository()
 
@@ -87,6 +94,7 @@ class AuthenticationApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
+        self.rate_limit_patch.stop()
         app.dependency_overrides.clear()
 
     def register(self, **overrides):

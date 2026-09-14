@@ -11,6 +11,11 @@ import { ReadinessService } from './common/readiness/readiness.service';
 
 const environmentBoolean = (value: string | undefined): boolean => ['1', 'true', 'yes', 'on'].includes(value?.trim().toLowerCase() ?? '');
 const hasValue = (value: string | undefined): boolean => Boolean(value?.trim());
+const positiveInteger = (name: string, value: string | undefined, fallback: number): number => {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isInteger(parsed) || parsed < 1) throw new Error(name + ' must be a positive integer.');
+  return parsed;
+};
 
 @Module({
   imports: [
@@ -81,8 +86,10 @@ const hasValue = (value: string | undefined): boolean => Boolean(value?.trim());
           REFRESH_TOKEN_EXPIRE_DAYS: Number(environment.REFRESH_TOKEN_EXPIRE_DAYS ?? 30),
           PASSWORD_RESET_EXPIRE_MINUTES: Number(environment.PASSWORD_RESET_EXPIRE_MINUTES ?? 60),
           EMAIL_VERIFICATION_EXPIRE_MINUTES: Number(environment.EMAIL_VERIFICATION_EXPIRE_MINUTES ?? 1440),
-          RATE_LIMIT_REQUESTS: Number(environment.RATE_LIMIT_REQUESTS ?? environment.RATE_LIMIT_MAX ?? 30),
-          RATE_LIMIT_WINDOW_SECONDS: Number(environment.RATE_LIMIT_WINDOW_SECONDS ?? 60),
+          RATE_LIMIT_REQUESTS: positiveInteger('RATE_LIMIT_REQUESTS', environment.RATE_LIMIT_REQUESTS ?? environment.RATE_LIMIT_MAX, 30),
+          RATE_LIMIT_WINDOW_SECONDS: positiveInteger('RATE_LIMIT_WINDOW_SECONDS', environment.RATE_LIMIT_WINDOW_SECONDS, 60),
+          AUTH_RATE_LIMIT_REQUESTS: positiveInteger('AUTH_RATE_LIMIT_REQUESTS', environment.AUTH_RATE_LIMIT_REQUESTS, 5),
+          AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger('AUTH_RATE_LIMIT_WINDOW_SECONDS', environment.AUTH_RATE_LIMIT_WINDOW_SECONDS, 60),
           RATE_LIMIT_PREFIX: environment.RATE_LIMIT_PREFIX?.trim() || 'rate-limit',
           RATE_LIMIT_ENABLED: environmentBoolean(environment.RATE_LIMIT_ENABLED),
           CORS_ORIGINS: environment.CORS_ORIGINS ?? 'http://localhost:3000',

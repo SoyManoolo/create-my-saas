@@ -20,6 +20,13 @@ type AppDependencies = {
   emailSender?: EmailSender;
 };
 
+const sensitiveAuthBuckets = new Map([
+  ['POST:/auth/register', 'auth:register'],
+  ['POST:/auth/login', 'auth:login'],
+  ['POST:/auth/password/reset/request', 'auth:password-reset-request'],
+  ['POST:/auth/password/reset/confirm', 'auth:password-reset-confirm'],
+]);
+
 export async function createApp({
   config,
   repository,
@@ -55,9 +62,14 @@ export async function createApp({
   app.addHook('onRequest', async (request, reply) => {
     if (['/health', '/ready'].includes(request.url.split('?', 1)[0])) return;
     const path = request.routeOptions.url ?? request.url.split('?', 1)[0];
-    const result = await rateLimiter.consume(`${request.method}:${path}:${request.ip}`);
+    const authBucket = sensitiveAuthBuckets.get(`${request.method}:${path}`);
+    const bucket = authBucket ?? `route:${request.method}:${path}`;
+    const policy = authBucket
+      ? { limit: config.AUTH_RATE_LIMIT_REQUESTS, windowSeconds: config.AUTH_RATE_LIMIT_WINDOW_SECONDS }
+      : { limit: config.RATE_LIMIT_REQUESTS, windowSeconds: config.RATE_LIMIT_WINDOW_SECONDS };
+    const result = await rateLimiter.consume(`${bucket}:${request.ip}`, policy);
     if (result === 'limited') {
-      return sendError(reply.header('Retry-After', String(config.RATE_LIMIT_WINDOW_SECONDS)), 429, 'RATE_LIMITED', 'Too many requests.');
+      return sendError(reply.header('Retry-After', String(policy.windowSeconds)), 429, 'RATE_LIMITED', 'Too many requests.');
     }
     if (result === 'unavailable') {
       return sendError(reply.header('Retry-After', '60'), 503, 'RATE_LIMIT_UNAVAILABLE', 'Request limiting is temporarily unavailable.');
