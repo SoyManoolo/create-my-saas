@@ -18,7 +18,11 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). `API_PROXY_TARGET` hace que Next reenvíe `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` conservando el mismo origen del navegador: así las cookies `HttpOnly` y la cookie CSRF funcionan correctamente. En producción configura el equivalente en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`.
+Abre [http://localhost:3000](http://localhost:3000). `API_PROXY_TARGET` hace que Next reenvíe `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` conservando el mismo origen del navegador: así las cookies `HttpOnly` y la cookie CSRF funcionan correctamente. En producción configura el equivalente en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`. Define también `NEXT_PUBLIC_SITE_URL` con el dominio canónico de producción para generar los enlaces canonicals y los metadatos sociales absolutos.
+
+## SEO
+
+Esta plantilla es una aplicación autenticada, no un sitio de marketing. Por eso todas sus rutas se sirven con `noindex, nofollow` y no genera sitemap: evita indexar pantallas privadas, formularios de acceso y URLs con tokens. El archivo `robots.txt` bloquea además las rutas internas de datos. Expón el contenido público e indexable desde una plantilla de sitio público, como la de Astro.
 
 ## Contrato API
 

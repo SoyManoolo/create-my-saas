@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError, api } from "../lib/api.client";
-import { OAuthButtons } from `../components/oauth-buttons`;
-import { captureAnalyticsEvent } from `../components/posthog-provider`;
+import { OAuthButtons } from "../components/oauth-buttons";
+import { privatePageMetadata } from "../lib/seo";
+import { captureAnalyticsEvent } from "../components/posthog-provider";
 
-export function meta() { return [{ title: "Crear cuenta · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Crear cuenta | SaaS starter", description: "Crea una cuenta para acceder al producto.", path: "/register" }); }
 
 export default function Register() {
   const navigate = useNavigate();

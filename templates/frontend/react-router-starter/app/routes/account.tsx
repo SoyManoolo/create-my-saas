@@ -2,8 +2,9 @@ import { useState } from "react";
 import { AppShell } from "../components/app-shell";
 import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
+import { privatePageMetadata } from "../lib/seo";
 
-export function meta() { return [{ title: "Cuenta · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Cuenta | SaaS starter", description: "Gestiona el perfil de tu cuenta.", path: "/account" }); }
 
 export default function Account() {
   const { user, resendVerification } = useAuth();

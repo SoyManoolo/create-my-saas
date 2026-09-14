@@ -4,11 +4,11 @@ Plantilla Astro para la parte pública y el área protegida ligera de un SaaS: l
 
 ## Arranque
 
-"`bash
+```bash
 cp .env.example .env
 pnpm install --frozen-lockfile
 pnpm dev
-"`
+```
 
 Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap. El generador rellena `API_PROXY_TARGET` para que Astro reenvíe `/auth` y `/users` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una ruta del mismo origen que reenvíe esos prefijos; esto conserva el alcance de las cookies `HttpOnly` y CSRF.
 
@@ -16,6 +16,7 @@ Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL`
 
 - Páginas públicas de inicio, pricing, documentación y blog, sin precios ni métricas inventadas.
 - Etiquetas `description`, canonical, Open Graph y Twitter Card por página.
+- Las rutas de autenticación y las áreas protegidas incluyen `noindex, nofollow, noarchive` y se excluyen del sitemap.
 - `@astrojs/sitemap` y una ruta `robots.txt`.
 - Registro, login, sesión con refresh cookie `HttpOnly`, rutas protegidas, logout, recuperación, verificación de correo y OAuth Google/GitHub.
 
@@ -31,7 +32,7 @@ PostHog está incluido pero permanece inactivo hasta configurar `PUBLIC_POSTHOG_
 
 ## Verificación
 
-"`bash
+```bash
 pnpm check
 pnpm build
-"`
+```

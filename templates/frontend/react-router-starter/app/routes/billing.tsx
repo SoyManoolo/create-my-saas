@@ -3,10 +3,11 @@ import { AppShell } from "../components/app-shell";
 import { ProtectedRoute } from "../components/protected-route";
 import { api, type BillingConfiguration, type BillingSubscription, type Organization } from "../lib/api.client";
 import { useAuth } from "../lib/auth-context";
+import { privatePageMetadata } from "../lib/seo";
 
 function entitlement(limit: number | null) { return limit === null ? "Sin límite" : `${limit} incluidos`; }
 
-export function meta() { return [{ title: "Facturación · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Facturación | SaaS starter", description: "Gestiona los planes y la suscripción de tu organización.", path: "/billing" }); }
 
 export default function Billing() {
   const { getAccessToken } = useAuth();

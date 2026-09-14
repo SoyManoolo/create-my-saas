@@ -3,8 +3,9 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { ApiError } from "../lib/api.client";
 import { useAuth } from "../lib/auth-context";
 import { OAuthButtons } from "../components/oauth-buttons";
+import { privatePageMetadata } from "../lib/seo";
 
-export function meta() { return [{ title: "Entrar · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Entrar | SaaS starter", description: "Accede a tu espacio de trabajo.", path: "/login" }); }
 
 export default function Login() {
   const { signIn } = useAuth();

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../lib/auth-context";
+import { privatePageMetadata } from "../lib/seo";
+
+export function meta() { return privatePageMetadata({ title: "Completando inicio de sesión | SaaS starter", description: "Completando el inicio de sesión seguro.", path: "/auth/oauth/callback" }); }
 
 export default function OAuthCallback() {
   const navigate = useNavigate();

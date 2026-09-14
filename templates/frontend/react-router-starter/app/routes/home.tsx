@@ -1,7 +1,12 @@
 import { Link } from "react-router";
+import { publicPageMetadata } from "../lib/seo";
 
 export function meta() {
-  return [{ title: "SaaS starter" }, { name: "description", content: "Base reutilizable para tu próximo SaaS." }];
+  return publicPageMetadata({
+    title: "SaaS starter",
+    description: "Base reutilizable para lanzar tu próximo SaaS con autenticación y rutas protegidas.",
+    path: "/",
+  });
 }
 
 export default function Home() {

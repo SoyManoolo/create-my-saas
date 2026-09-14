@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { ApiError, api } from "../lib/api.client";
+import { privatePageMetadata } from "../lib/seo";
 
-export function meta() { return [{ title: "Recuperar cuenta · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Recuperar cuenta | SaaS starter", description: "Solicita un enlace para restablecer tu contraseña.", path: "/forgot-password" }); }
 
 export default function ForgotPassword() {
   const [error, setError] = useState<string>();

@@ -15,9 +15,19 @@ export default defineConfig(() => {
   const environment = { ...values, ...process.env };
   const site = environment.PUBLIC_SITE_URL ?? 'https://example.com';
   const apiTarget = environment.API_PROXY_TARGET?.replace(/\/$/, '');
+  const noindexPaths = new Set([
+    '/account/',
+    '/app/',
+    '/auth/oauth/callback/',
+    '/forgot-password/',
+    '/login/',
+    '/register/',
+    '/reset-password/',
+    '/verify-email/',
+  ]);
   return {
     site,
-    integrations: [sitemap()],
+    integrations: [sitemap({ filter: (page) => !noindexPaths.has(new URL(page).pathname) })],
     vite: apiTarget ? {
       server: {
         proxy: {

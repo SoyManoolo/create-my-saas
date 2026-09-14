@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ApiError, api } from "../lib/api.client";
+import { privatePageMetadata } from "../lib/seo";
 
-export function meta() { return [{ title: "Verificar email · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Verificar correo | SaaS starter", description: "Verifica el correo electrónico de tu cuenta.", path: "/verify-email" }); }
 
 export default function VerifyEmail() {
   const [search] = useSearchParams();

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ApiError, api } from "../lib/api.client";
+import { privatePageMetadata } from "../lib/seo";
 
-export function meta() { return [{ title: "Restablecer contraseña · SaaS starter" }]; }
+export function meta() { return privatePageMetadata({ title: "Restablecer contraseña | SaaS starter", description: "Elige una contraseña nueva para tu cuenta.", path: "/reset-password" }); }
 
 export default function ResetPassword() {
   const [search] = useSearchParams();

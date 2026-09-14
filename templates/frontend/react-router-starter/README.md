@@ -20,7 +20,11 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:5173](http://localhost:5173). La ruta de servidor integrada reenvía `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` a `API_PROXY_TARGET`, preservando las cookies en el mismo origen de navegador. En producción configura el mismo comportamiento en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`.
+Abre [http://localhost:5173](http://localhost:5173). La ruta de servidor integrada reenvía `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` a `API_PROXY_TARGET`, preservando las cookies en el mismo origen de navegador. En producción configura el mismo comportamiento en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`. Define `VITE_PUBLIC_SITE_URL` con el dominio canónico de producción para que las etiquetas SEO, `robots.txt` y `sitemap.xml` contengan URLs absolutas correctas.
+
+## SEO
+
+La landing (`/`) incluye descripción, canonical, Open Graph, Twitter Card y es la única URL publicada en el sitemap. Las pantallas de autenticación y el área protegida incluyen `noindex, nofollow, noarchive`, de modo que los formularios y la información de cuentas no se indexan.
 
 ## Contrato API
 
