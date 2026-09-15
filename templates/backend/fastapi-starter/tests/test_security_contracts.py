@@ -110,15 +110,20 @@ class SecurityContractTests(unittest.TestCase):
         self.assertNotIn(password, response.text)
 
     def test_google_oauth_requires_a_verified_email(self):
-        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": True, "name": "Person"}]):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"sub": "google-subject-1", "email": "person@example.com", "email_verified": True, "name": "Person"}]):
             profile = asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
-        self.assertEqual((profile.email, profile.name), ("person@example.com", "Person"))
+        self.assertEqual((profile.email, profile.name, profile.provider_account_id), ("person@example.com", "Person", "google-subject-1"))
 
-        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": False}]):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"sub": "google-subject-1", "email": "person@example.com", "email_verified": False}]):
             with self.assertRaisesRegex(Exception, "verified email"):
                 asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
 
     def test_github_oauth_uses_primary_verified_email_endpoint(self):
-        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"login": "octocat"}, [{"email": "person@example.com", "primary": True, "verified": True}]]):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"id": 42, "login": "octocat"}, [{"email": "person@example.com", "primary": True, "verified": True}]]):
             profile = asyncio.run(exchange_profile("github", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
-        self.assertEqual((profile.email, profile.name), ("person@example.com", "octocat"))
+        self.assertEqual((profile.email, profile.name, profile.provider_account_id), ("person@example.com", "octocat", "42"))
+
+    def test_oauth_rejects_profiles_without_stable_subjects(self):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": True}]):
+            with self.assertRaisesRegex(Exception, "stable account identifier"):
+                asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))

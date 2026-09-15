@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
-import type { OneTimeTokenKind, SessionRepository, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../types.js';
+import type { OneTimeTokenKind, SessionRepository, StoredOAuthAccount, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../types.js';
 
 type UserRow = {
   id: string;
@@ -28,6 +28,14 @@ type OAuthStateRow = {
   code_verifier: string;
   expires_at: Date;
   used_at: Date | null;
+};
+
+type OAuthAccountRow = {
+  id: string;
+  user_id: string;
+  provider: string;
+  provider_account_id: string;
+  created_at: Date;
 };
 
 type SessionRow = {
@@ -58,6 +66,10 @@ function oneTimeToken(row: OneTimeTokenRow): StoredOneTimeToken {
 
 function oauthState(row: OAuthStateRow): StoredOAuthState {
   return { id: row.id, provider: row.provider, stateHash: row.state_hash, codeVerifier: row.code_verifier, expiresAt: row.expires_at, usedAt: row.used_at };
+}
+
+function oauthAccount(row: OAuthAccountRow): StoredOAuthAccount {
+  return { id: row.id, userId: row.user_id, provider: row.provider, providerAccountId: row.provider_account_id, createdAt: row.created_at };
 }
 
 function session(row: SessionRow): StoredSession {
@@ -203,5 +215,26 @@ export class PostgresSessionRepository implements SessionRepository {
       returning id, provider, state_hash, code_verifier, expires_at, used_at
     `;
     return rows[0] ? oauthState(rows[0]) : undefined;
+  }
+
+  async findOAuthAccount(provider: string, providerAccountId: string): Promise<StoredOAuthAccount | undefined> {
+    const rows = await this.sql<OAuthAccountRow[]>`
+      select id, user_id, provider, provider_account_id, created_at from oauth_accounts
+      where provider = ${provider} and provider_account_id = ${providerAccountId}
+    `;
+    return rows[0] ? oauthAccount(rows[0]) : undefined;
+  }
+
+  async createOAuthAccount(input: Omit<StoredOAuthAccount, 'createdAt'>): Promise<StoredOAuthAccount> {
+    const rows = await this.sql<OAuthAccountRow[]>`
+      insert into oauth_accounts (id, user_id, provider, provider_account_id)
+      values (${input.id}, ${input.userId}, ${input.provider}, ${input.providerAccountId})
+      on conflict (provider, provider_account_id) do nothing
+      returning id, user_id, provider, provider_account_id, created_at
+    `;
+    if (rows[0]) return oauthAccount(rows[0]);
+    const existing = await this.findOAuthAccount(input.provider, input.providerAccountId);
+    if (!existing) throw new Error('OAuth account insert did not persist a record.');
+    return existing;
   }
 }

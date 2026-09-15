@@ -14,6 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshSession } from './refresh-session.entity';
 import { OAuthState } from './oauth-state.entity';
+import { OAuthAccount } from './oauth-account.entity';
 import { SecureEmailService } from './secure-email.service';
 
 export type AuthenticationResult = { accessToken: string; user: UserPublicDto };
@@ -30,6 +31,7 @@ export class AuthService {
     @InjectRepository(RefreshSession) private readonly sessions: Repository<RefreshSession>,
     @InjectRepository(AuthToken) private readonly tokens: Repository<AuthToken>,
     @InjectRepository(OAuthState) private readonly oauthStates: Repository<OAuthState>,
+    @InjectRepository(OAuthAccount) private readonly oauthAccounts: Repository<OAuthAccount>,
     private readonly dataSource: DataSource,
     private readonly secureEmail: SecureEmailService,
   ) {}
@@ -147,8 +149,27 @@ export class AuthService {
     const used = await this.oauthStates.update({ id: record.id, usedAt: IsNull() }, { usedAt: new Date() });
     if (!used.affected) throw new AppError('OAUTH_STATE_INVALID', 'OAuth state was already used.', 400);
     const profile = await this.exchangeOAuthProfile(provider, code, record.codeVerifier, config);
-    let user = await this.usersService.findByEmail(profile.email);
-    if (!user) user = await this.usersService.create({ email: profile.email, name: profile.name, passwordHash: null });
+    const account = await this.oauthAccounts.findOneBy({ provider, providerAccountId: profile.providerAccountId });
+    const emailUser = await this.usersService.findByEmail(profile.email);
+    if (account) {
+      if (emailUser && emailUser.id !== account.userId) throw new AppError('OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.', 409);
+      const user = await this.usersService.findById(account.userId);
+      if (!user) throw new AppError('OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.', 409);
+      return this.completeOAuthAuthentication(user);
+    }
+    const user = emailUser ?? await this.usersService.create({ email: profile.email, name: profile.name, passwordHash: null });
+    try {
+      const linked = await this.oauthAccounts.save(this.oauthAccounts.create({ provider, providerAccountId: profile.providerAccountId, userId: user.id }));
+      if (linked.userId !== user.id) throw new AppError('OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.', 409);
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) throw error;
+      const linked = await this.oauthAccounts.findOneBy({ provider, providerAccountId: profile.providerAccountId });
+      if (!linked || linked.userId !== user.id) throw new AppError('OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.', 409);
+    }
+    return this.completeOAuthAuthentication(user);
+  }
+
+  private async completeOAuthAuthentication(user: User): Promise<BrowserAuthenticationResult> {
     if (!user.isActive) throw new AppError('USER_INACTIVE', 'The user account is inactive.', 403);
     if (!user.emailVerified) { user.emailVerified = true; await this.usersService.save(user); }
     return this.createAuthentication(user, {});
@@ -175,7 +196,7 @@ export class AuthService {
       scopes: this.config.get<string>(`OAUTH_${key}_SCOPES`, google ? 'openid email profile' : 'read:user user:email'),
     };
   }
-  private async exchangeOAuthProfile(provider: string, code: string, verifier: string, config: { clientId: string; clientSecret: string; tokenUrl: string; userInfoUrl: string; redirectUri: string }): Promise<{ email: string; name: string }> {
+  private async exchangeOAuthProfile(provider: string, code: string, verifier: string, config: { clientId: string; clientSecret: string; tokenUrl: string; userInfoUrl: string; redirectUri: string }): Promise<{ email: string; name: string; providerAccountId: string }> {
     const token = await this.oauthJson(config.tokenUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: config.redirectUri, code_verifier: verifier }) });
     if (typeof token.access_token !== 'string' || !token.access_token) throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider did not return an access token.', 502);
     const headers = { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json', 'User-Agent': 'create-my-saas' };
@@ -186,7 +207,9 @@ export class AuthService {
     }
     const verified = provider === 'google' ? profile.email_verified === true : Boolean(profile.email);
     if (typeof profile.email !== 'string' || !profile.email || !verified) throw new AppError('OAUTH_EMAIL_UNVERIFIED', 'The OAuth provider did not provide a verified email address.', 400);
-    return { email: profile.email.toLowerCase(), name: String(profile.name ?? profile.login ?? profile.email.split('@')[0]).slice(0, 120) };
+    const providerAccountId = provider === 'google' ? profile.sub : profile.id;
+    if ((typeof providerAccountId !== 'string' && typeof providerAccountId !== 'number') || !String(providerAccountId)) throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider did not return a stable account identifier.', 502);
+    return { email: profile.email.toLowerCase(), name: String(profile.name ?? profile.login ?? profile.email.split('@')[0]).slice(0, 120), providerAccountId: String(providerAccountId) };
   }
   private async oauthJson(url: string, options: RequestInit): Promise<any> {
     let response: Response;

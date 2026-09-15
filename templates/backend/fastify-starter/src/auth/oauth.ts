@@ -78,7 +78,7 @@ export async function exchangeOAuthProfile(
   code: string,
   verifier: string,
   config: OAuthProviderConfig,
-): Promise<{ email: string; name: string }> {
+): Promise<{ email: string; name: string; providerAccountId: string }> {
   const token = await oauthJson(config.tokenUrl, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -103,11 +103,16 @@ export async function exchangeOAuthProfile(
     }
   }
   const verified = provider === 'google' ? profile.email_verified === true : Boolean(profile.email);
+  const providerAccountId = provider === 'google' ? profile.sub : profile.id;
   if (typeof profile.email !== 'string' || !profile.email || !verified) {
     throw new AppError(400, 'OAUTH_EMAIL_UNVERIFIED', 'The OAuth provider did not provide a verified email address.');
+  }
+  if ((typeof providerAccountId !== 'string' && typeof providerAccountId !== 'number') || !String(providerAccountId)) {
+    throw new AppError(502, 'OAUTH_PROVIDER_ERROR', 'The OAuth provider did not return a stable account identifier.');
   }
   return {
     email: profile.email.toLowerCase(),
     name: String(profile.name ?? profile.login ?? profile.email.split('@')[0]).slice(0, 120),
+    providerAccountId: String(providerAccountId),
   };
 }

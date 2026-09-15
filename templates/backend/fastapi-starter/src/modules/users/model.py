@@ -48,6 +48,16 @@ class OAuthState(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+class OAuthAccount(Base):
+    """An immutable external subject explicitly linked to a local user."""
+    __tablename__ = "oauth_accounts"
+    __table_args__ = (UniqueConstraint("provider", "provider_account_id", name="uq_oauth_account_provider_subject"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider_account_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
 class OneTimeToken(Base):
     __tablename__ = "one_time_tokens"
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)

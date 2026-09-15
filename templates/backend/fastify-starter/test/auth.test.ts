@@ -4,13 +4,14 @@ import test from 'node:test';
 import { createApp } from '../src/app.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { EmailDeliveryError, SecureEmailSender, type EmailSender } from '../src/email.js';
-import type { OneTimeTokenKind, SessionRepository, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../src/types.js';
+import type { OneTimeTokenKind, SessionRepository, StoredOAuthAccount, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../src/types.js';
 
 class InMemorySessions implements SessionRepository {
   readonly users = new Map<string, StoredUser>();
   readonly sessions = new Map<string, StoredSession>();
   readonly tokens = new Map<string, StoredOneTimeToken>();
   readonly oauthStates = new Map<string, StoredOAuthState>();
+  readonly oauthAccounts = new Map<string, StoredOAuthAccount>();
 
   async createUser(input: { email: string; name: string; passwordHash: string | null; emailVerified?: boolean }): Promise<StoredUser> {
     const user = {
@@ -70,6 +71,17 @@ class InMemorySessions implements SessionRepository {
     const state = [...this.oauthStates.values()].find((item) => item.provider === provider && item.stateHash === stateHash && !item.usedAt && item.expiresAt > new Date());
     if (state) state.usedAt = new Date();
     return state;
+  }
+  async findOAuthAccount(provider: string, providerAccountId: string) {
+    return this.oauthAccounts.get(`${provider}:${providerAccountId}`);
+  }
+  async createOAuthAccount(account: Omit<StoredOAuthAccount, 'createdAt'>) {
+    const key = `${account.provider}:${account.providerAccountId}`;
+    const existing = this.oauthAccounts.get(key);
+    if (existing) return existing;
+    const created = { ...account, createdAt: new Date() };
+    this.oauthAccounts.set(key, created);
+    return created;
   }
 }
 
@@ -348,7 +360,7 @@ test('password recovery and email verification use opaque, single-use tokens', a
   }
 });
 
-test('OAuth publishes configured providers and protects PKCE state from reuse', async () => {
+test('OAuth persists a stable provider account, exchanges PKCE, and rejects state or identity conflicts', async () => {
   const repository = new InMemorySessions();
   const oauthConfig: Config = {
     ...config,
@@ -358,6 +370,7 @@ test('OAuth publishes configured providers and protects PKCE state from reuse', 
     OAUTH_GOOGLE_REDIRECT_URI: 'http://localhost:3002/auth/oauth/google/callback',
   };
   const app = await createApp({ config: oauthConfig, repository, databaseReady: async () => {} });
+  const originalFetch = globalThis.fetch;
   try {
     const providers = await app.inject({ method: 'GET', url: '/auth/oauth/providers' });
     assert.deepEqual(providers.json(), [{ provider: 'google', configured: true }, { provider: 'github', configured: false }]);
@@ -367,11 +380,38 @@ test('OAuth publishes configured providers and protects PKCE state from reuse', 
     assert.equal(url.origin, 'https://accounts.google.com');
     assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
     assert.ok(url.searchParams.get('state'));
+    const firstState = url.searchParams.get('state')!;
+    const storedState = [...repository.oauthStates.values()][0]!;
+    const requests: RequestInit[] = [];
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(init!);
+      const body = init?.body instanceof URLSearchParams ? Object.fromEntries(init.body.entries()) : {};
+      if (body.grant_type === 'authorization_code') return { ok: true, json: async () => ({ access_token: 'provider-token' }) } as Response;
+      return { ok: true, json: async () => ({ sub: 'google-subject-1', email: 'person@example.com', email_verified: true, name: 'Person' }) } as Response;
+    }) as typeof fetch;
+    const callback = await app.inject({ method: 'GET', url: `/auth/oauth/google/callback?code=code&state=${encodeURIComponent(firstState)}` });
+    assert.equal(callback.statusCode, 303);
+    assert.equal(callback.headers.location, 'http://localhost:3000/auth/oauth/callback');
+    assert.equal(repository.oauthAccounts.get('google:google-subject-1')?.userId, [...repository.users.values()][0]?.id);
+    assert.equal((requests[0]?.body as URLSearchParams).get('code_verifier'), storedState.codeVerifier);
+    const reused = await app.inject({ method: 'GET', url: `/auth/oauth/google/callback?code=code&state=${encodeURIComponent(firstState)}` });
+    assert.deepEqual(reused.json(), { error: { code: 'OAUTH_STATE_INVALID', message: 'OAuth state is invalid or expired.' } });
     const invalidCallback = await app.inject({ method: 'GET', url: '/auth/oauth/google/callback?code=code&state=invalid' });
     assert.deepEqual(invalidCallback.json(), { error: { code: 'OAUTH_STATE_INVALID', message: 'OAuth state is invalid or expired.' } });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { email: 'other@example.com', name: 'Other', password: 'password1' } });
+    const conflictStart = await app.inject({ method: 'GET', url: '/auth/oauth/google' });
+    const conflictState = new URL(conflictStart.json().authorizationUrl).searchParams.get('state')!;
+    globalThis.fetch = (async (_input, init) => {
+      const body = init?.body instanceof URLSearchParams ? Object.fromEntries(init.body.entries()) : {};
+      if (body.grant_type === 'authorization_code') return { ok: true, json: async () => ({ access_token: 'provider-token' }) } as Response;
+      return { ok: true, json: async () => ({ sub: 'google-subject-1', email: 'other@example.com', email_verified: true, name: 'Other' }) } as Response;
+    }) as typeof fetch;
+    const conflict = await app.inject({ method: 'GET', url: `/auth/oauth/google/callback?code=code&state=${encodeURIComponent(conflictState)}` });
+    assert.deepEqual(conflict.json(), { error: { code: 'OAUTH_ACCOUNT_CONFLICT', message: 'This OAuth account is linked to a different user.' } });
     const unavailable = await app.inject({ method: 'GET', url: '/auth/oauth/github' });
     assert.deepEqual(unavailable.json(), { error: { code: 'OAUTH_PROVIDER_UNAVAILABLE', message: 'This OAuth provider is not configured.' } });
   } finally {
+    globalThis.fetch = originalFetch;
     await app.close();
   }
 });

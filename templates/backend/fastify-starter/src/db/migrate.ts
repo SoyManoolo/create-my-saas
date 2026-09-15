@@ -54,6 +54,16 @@ const migration = `
   create index if not exists oauth_states_active_lookup_idx
     on oauth_states (provider, state_hash) where used_at is null;
 
+  create table if not exists oauth_accounts (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    provider text not null check (provider in ('google', 'github')),
+    provider_account_id text not null,
+    created_at timestamptz not null default now(),
+    unique (provider, provider_account_id)
+  );
+  create index if not exists oauth_accounts_user_idx on oauth_accounts (user_id);
+
   alter table users add column if not exists email_verified boolean not null default false;
   alter table users add column if not exists is_active boolean not null default true;
   alter table users alter column password_hash drop not null;
@@ -71,8 +81,11 @@ try {
     await transaction`
       insert into schema_migrations (id) values ('0002_auth_recovery_email_oauth') on conflict (id) do nothing
     `;
+    await transaction`
+      insert into schema_migrations (id) values ('0003_oauth_accounts') on conflict (id) do nothing
+    `;
   });
-  console.log('Database migrations through 0002_auth_recovery_email_oauth are applied.');
+  console.log('Database migrations through 0003_oauth_accounts are applied.');
 } finally {
   await sql.end();
 }

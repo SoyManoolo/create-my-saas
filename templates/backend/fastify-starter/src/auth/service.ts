@@ -133,10 +133,27 @@ export class AuthService {
     const state = await this.repository.consumeOAuthState(provider, tokenHash(stateToken));
     if (!state) throw new AppError(400, 'OAUTH_STATE_INVALID', 'OAuth state is invalid or expired.');
     const profile = await exchangeOAuthProfile(provider, code, state.codeVerifier, providerConfig);
-    let user = await this.repository.findUserByEmail(profile.email);
-    if (!user) {
-      user = await this.repository.createUser({ email: profile.email, name: profile.name, passwordHash: null, emailVerified: true });
+    const account = await this.repository.findOAuthAccount(provider, profile.providerAccountId);
+    const emailUser = await this.repository.findUserByEmail(profile.email);
+    if (account) {
+      if (emailUser && emailUser.id !== account.userId) {
+        throw new AppError(409, 'OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.');
+      }
+      const user = await this.repository.findUserById(account.userId);
+      if (!user) throw new AppError(409, 'OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.');
+      return this.completeOAuthSession(user);
     }
+    const user = emailUser ?? await this.repository.createUser({ email: profile.email, name: profile.name, passwordHash: null, emailVerified: true });
+    const linked = await this.repository.createOAuthAccount({
+      id: randomUUID(), userId: user.id, provider, providerAccountId: profile.providerAccountId,
+    });
+    if (linked.userId !== user.id) {
+      throw new AppError(409, 'OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.');
+    }
+    return this.completeOAuthSession(user);
+  }
+
+  private async completeOAuthSession(user: StoredUser): Promise<SessionTokens> {
     if (!user.isActive) throw new AppError(403, 'USER_INACTIVE', 'The user account is inactive.');
     if (!user.emailVerified) await this.repository.setEmailVerified(user.id);
     return this.issueSession(user);

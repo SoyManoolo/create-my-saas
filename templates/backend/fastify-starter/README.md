@@ -59,7 +59,7 @@ forwarding headers and reconstruct them itself.
 | `GET /auth/oauth/providers` | Lists Google and GitHub and whether each is configured. |
 | `GET /auth/oauth/:provider` | Creates a server-side PKCE state and returns `{ authorizationUrl }`. |
 | `GET /auth/oauth/:provider/start` | Browser redirect variant of the previous route. |
-| `GET /auth/oauth/:provider/callback` | Consumes PKCE state, creates or finds the user, sets browser cookies, then redirects to the frontend callback. |
+| `GET /auth/oauth/:provider/callback` | Consumes PKCE state, resolves the immutable provider account, sets browser cookies, then redirects to the frontend callback. |
 
 `refresh_token` is scoped to `/auth` and `csrf_token` is intentionally readable
 across `/` so an application route can call `/auth/refresh` or `/auth/logout`.
@@ -93,6 +93,10 @@ provider. `state` is stored only as a hash; the code verifier remains server
 side, expires in ten minutes and can be consumed once. Google must assert a
 verified email; GitHub uses its primary verified-email endpoint when the profile
 does not contain one. OAuth users are automatically marked as email verified.
+The first verified sign-in links the provider subject to a local user in
+`oauth_accounts`; subsequent sign-ins use that stable link rather than email.
+If a provider subject and a local email resolve to different users, the callback
+returns `OAUTH_ACCOUNT_CONFLICT` instead of merging accounts.
 
 These authentication flows intentionally live only in this backend starter and
 its API contract. They do not add, change, or assume any dashboard screens.

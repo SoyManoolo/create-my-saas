@@ -1,13 +1,14 @@
 from datetime import timedelta
 from urllib.parse import urlencode
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
 from src.core.exceptions import AppError
 from src.core.email import send_secure_email
 from src.modules.users.repository import UserRepository
 from src.modules.users.schemas import UserLogin, UserPublic, UserRegister
-from src.modules.users.model import RefreshToken, OneTimeToken, TokenPurpose, User
+from src.modules.users.model import OAuthAccount, RefreshToken, OneTimeToken, TokenPurpose, User
 from src.modules.auth.security.password import hash_password, verify_password
 from src.modules.auth.security.tokens import encode_access_token, opaque_token, token_hash, utc_now
 
@@ -23,11 +24,37 @@ class AuthService:
         if not user or not user.is_active or not user.password_hash or not verify_password(payload.password, user.password_hash): return None
         return user, await self.issue_session(user)
 
-    async def login_oauth(self, email: str, name: str) -> tuple[dict, str]:
-        """Create or sign in a user whose email has been verified by OAuth."""
-        user = await self.users.get_user_by_email(email)
+    async def login_oauth(self, provider: str, profile) -> tuple[dict, str]:
+        """Resolve a stable provider subject before using email to bootstrap its link."""
+        account = (await self.db.execute(select(OAuthAccount).where(
+            OAuthAccount.provider == provider,
+            OAuthAccount.provider_account_id == profile.provider_account_id,
+        ))).scalar_one_or_none()
+        email_user = await self.users.get_user_by_email(profile.email)
+        if account:
+            if email_user and email_user.id != account.user_id:
+                raise AppError("This OAuth account is linked to a different user.", code="OAUTH_ACCOUNT_CONFLICT", status_code=409)
+            user = await self.users.get_user_by_id(account.user_id)
+            if not user:
+                raise AppError("This OAuth account is linked to a different user.", code="OAUTH_ACCOUNT_CONFLICT", status_code=409)
+            return await self._complete_oauth_session(user)
+        user = email_user
         if not user:
-            user = await self.users.create_user(User(email=email, name=name, password_hash=None, email_verified=True))
+            user = await self.users.create_user(User(email=profile.email, name=profile.name, password_hash=None, email_verified=True))
+        self.db.add(OAuthAccount(user_id=user.id, provider=provider, provider_account_id=profile.provider_account_id))
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            linked = (await self.db.execute(select(OAuthAccount).where(
+                OAuthAccount.provider == provider,
+                OAuthAccount.provider_account_id == profile.provider_account_id,
+            ))).scalar_one_or_none()
+            if not linked or linked.user_id != user.id:
+                raise AppError("This OAuth account is linked to a different user.", code="OAUTH_ACCOUNT_CONFLICT", status_code=409)
+        return await self._complete_oauth_session(user)
+
+    async def _complete_oauth_session(self, user: User) -> tuple[dict, str]:
         if not user.is_active:
             raise AppError("The user account is inactive.", code="USER_INACTIVE", status_code=403)
         if not user.email_verified:

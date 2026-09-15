@@ -34,6 +34,7 @@ SUPPORTED_PROVIDERS = {"google", "github"}
 class OAuthProfile:
     email: str
     name: str
+    provider_account_id: str
 
 
 def _provider_env(provider: str, name: str, default: str | None = None) -> str | None:
@@ -87,7 +88,10 @@ async def exchange_profile(provider: str, code: str, verifier: str, config: dict
     verified = profile.get("email_verified", True) if provider == "google" else bool(email)
     if not isinstance(email, str) or not email or not verified:
         raise AppError("The OAuth provider did not provide a verified email address.", code="OAUTH_EMAIL_UNVERIFIED", status_code=400)
-    return OAuthProfile(email=email.lower(), name=str(profile.get("name") or profile.get("login") or email.split("@", 1)[0])[:120])
+    provider_account_id = profile.get("sub") if provider == "google" else profile.get("id")
+    if isinstance(provider_account_id, bool) or not isinstance(provider_account_id, (str, int)) or not str(provider_account_id):
+        raise AppError("The OAuth provider did not return a stable account identifier.", code="OAUTH_PROVIDER_ERROR", status_code=502)
+    return OAuthProfile(email=email.lower(), name=str(profile.get("name") or profile.get("login") or email.split("@", 1)[0])[:120], provider_account_id=str(provider_account_id))
 
 
 @router.get("/{provider}/start")
@@ -114,7 +118,7 @@ async def oauth_callback(provider: str, code: str = Query(min_length=1), state: 
     if not verifier:
         raise AppError("OAuth state is invalid or expired.", code="OAUTH_STATE_INVALID", status_code=400)
     profile = await exchange_profile(provider, code, verifier, config)
-    _, refresh_token = await AuthService(db, users).login_oauth(profile.email, profile.name)
+    _, refresh_token = await AuthService(db, users).login_oauth(provider, profile)
     response = RedirectResponse(f"{settings.frontend_url.rstrip('/')}/auth/oauth/callback", status_code=303)
     set_session_cookies(response, refresh_token)
     return response

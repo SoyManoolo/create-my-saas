@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 from datetime import timedelta
 from uuid import uuid4
+from types import SimpleNamespace
 
 import jwt
 from fastapi.testclient import TestClient
@@ -12,7 +13,7 @@ from src.db.database import get_db
 from main import app
 from src.modules.auth.dependencies import get_user_repository
 from src.modules.auth.security.tokens import utc_now
-from src.modules.users.model import User
+from src.modules.users.model import OAuthAccount, User
 from src.modules.auth.service import AuthService
 from src.modules.users.model import TokenPurpose
 
@@ -63,6 +64,30 @@ class InMemoryUserRepository:
         self.users_by_email[user.email] = user
         self.users_by_id[str(user.id)] = user
         return user
+
+
+class OAuthIdentitySession:
+    """Exercises provider-subject linking without a database server."""
+    def __init__(self):
+        self.accounts: list[OAuthAccount] = []
+        self.pending: list[object] = []
+
+    def add(self, record):
+        self.pending.append(record)
+
+    async def commit(self):
+        self.accounts.extend(record for record in self.pending if isinstance(record, OAuthAccount))
+        self.pending.clear()
+
+    async def rollback(self):
+        self.pending.clear()
+
+    async def execute(self, statement):
+        params = statement.compile().params
+        provider = next((value for key, value in params.items() if "provider" in key), None)
+        subject = next((value for key, value in params.items() if "provider_account_id" in key), None)
+        account = next((item for item in self.accounts if item.provider == provider and item.provider_account_id == subject), None)
+        return SimpleNamespace(scalar_one_or_none=lambda: account)
 
 
 class AuthenticationApiTests(unittest.TestCase):
@@ -248,3 +273,23 @@ class AuthenticationApiTests(unittest.TestCase):
             ("POST", "/auth/password/change"),
         }
         self.assertTrue(expected.issubset(routes))
+
+    def test_oauth_links_the_provider_subject_once_and_rejects_email_identity_conflicts(self):
+        session = OAuthIdentitySession()
+        users = InMemoryUserRepository()
+        service = AuthService(session, users)
+        profile = SimpleNamespace(email="person@example.com", name="Person", provider_account_id="google-subject-1")
+
+        _, first_refresh = __import__("asyncio").run(service.login_oauth("google", profile))
+        self.assertTrue(first_refresh)
+        self.assertEqual(len(session.accounts), 1)
+        linked_user_id = session.accounts[0].user_id
+        _, second_refresh = __import__("asyncio").run(service.login_oauth("google", profile))
+        self.assertTrue(second_refresh)
+        self.assertEqual(len(session.accounts), 1)
+        self.assertEqual(session.accounts[0].user_id, linked_user_id)
+
+        __import__("asyncio").run(users.create_user(User(email="other@example.com", name="Other", password_hash="hash")))
+        conflicting = SimpleNamespace(email="other@example.com", name="Other", provider_account_id="google-subject-1")
+        with self.assertRaisesRegex(Exception, "linked to a different user"):
+            __import__("asyncio").run(service.login_oauth("google", conflicting))

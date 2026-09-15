@@ -9,6 +9,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { RefreshSession } from './refresh-session.entity';
 import { AuthToken } from './auth-token.entity';
 import { OAuthState } from './oauth-state.entity';
+import { OAuthAccount } from './oauth-account.entity';
 import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
 import { RateLimitService } from '../common/rate-limit/rate-limit.service';
 import { SecureEmailService } from './secure-email.service';
@@ -17,7 +18,7 @@ import { SecureEmailService } from './secure-email.service';
 @Module({
   imports: [
     UsersModule,
-    TypeOrmModule.forFeature([RefreshSession, AuthToken, OAuthState]),
+    TypeOrmModule.forFeature([RefreshSession, AuthToken, OAuthState, OAuthAccount]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

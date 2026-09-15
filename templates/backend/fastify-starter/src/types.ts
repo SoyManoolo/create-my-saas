@@ -39,6 +39,15 @@ export type StoredOAuthState = {
   usedAt: Date | null;
 };
 
+/** A stable external identity. Email is only used when this record is first created. */
+export type StoredOAuthAccount = {
+  id: string;
+  userId: string;
+  provider: string;
+  providerAccountId: string;
+  createdAt: Date;
+};
+
 export interface SessionRepository {
   createUser(input: { email: string; name: string; passwordHash: string | null; emailVerified?: boolean }): Promise<StoredUser>;
   findUserByEmail(email: string): Promise<StoredUser | undefined>;
@@ -61,4 +70,7 @@ export interface SessionRepository {
   consumeOneTimeToken(tokenHash: string, kind: OneTimeTokenKind): Promise<StoredOneTimeToken | undefined>;
   createOAuthState(state: StoredOAuthState): Promise<void>;
   consumeOAuthState(provider: string, stateHash: string): Promise<StoredOAuthState | undefined>;
+  findOAuthAccount(provider: string, providerAccountId: string): Promise<StoredOAuthAccount | undefined>;
+  /** Returns the persisted account, including the winner of a concurrent insert. */
+  createOAuthAccount(input: Omit<StoredOAuthAccount, 'createdAt'>): Promise<StoredOAuthAccount>;
 }
