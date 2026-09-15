@@ -92,6 +92,7 @@ const positiveInteger = (name: string, value: string | undefined, fallback: numb
           AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger('AUTH_RATE_LIMIT_WINDOW_SECONDS', environment.AUTH_RATE_LIMIT_WINDOW_SECONDS, 60),
           RATE_LIMIT_PREFIX: environment.RATE_LIMIT_PREFIX?.trim() || 'rate-limit',
           RATE_LIMIT_ENABLED: environmentBoolean(environment.RATE_LIMIT_ENABLED),
+          AUDIT_LOG_ENABLED: environmentBoolean(environment.AUDIT_LOG_ENABLED ?? 'true'),
           CORS_ORIGINS: environment.CORS_ORIGINS ?? 'http://localhost:3000',
           FRONTEND_URL: environment.FRONTEND_URL ?? 'http://localhost:3000',
           REFRESH_COOKIE_NAME: environment.REFRESH_COOKIE_NAME ?? 'refresh_token',

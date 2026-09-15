@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
 from src.modules.users.model import AuditLog
 
 AuditValue = str | int | bool | None
@@ -43,13 +44,15 @@ def record_audit_event(
     target_type: str,
     target_id: UUID | str | None = None,
     metadata: Mapping[str, AuditValue] | None = None,
-) -> AuditLog:
+) -> AuditLog | None:
     safe_metadata = dict(metadata or {})
     unexpected = safe_metadata.keys() - _ALLOWED_METADATA[action]
     if unexpected:
         raise ValueError(f"Audit metadata is not allowed for {action}: {', '.join(sorted(unexpected))}")
     if any(isinstance(value, (dict, list, tuple, set)) for value in safe_metadata.values()):
         raise ValueError("Audit metadata values must be scalar.")
+    if not settings.audit_log_enabled:
+        return None
     event = AuditLog(
         organization_id=organization_id,
         actor_user_id=actor_user_id,

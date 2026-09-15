@@ -63,6 +63,11 @@ append-only `audit_logs` table. Owners and administrators can read the newest
 events through `GET /organizations/{organizationId}/audit-logs`; `limit` is 50
 by default (100 maximum) and `cursor` continues from `nextCursor`.
 
+The log is enabled by default. Set `AUDIT_LOG_ENABLED=false` to stop recording
+new events without changing business operations, removing the table, or hiding
+historical events. Set it back to `true` to resume recording; no migration is
+needed.
+
 Each event stores the organization, actor, action, target, timestamp, and only
 action-specific allowlisted metadata. Invitation tokens and hashes, request
 bodies, credentials, Stripe customer/session/subscription IDs, payment methods,

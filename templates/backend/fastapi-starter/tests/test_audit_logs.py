@@ -1,11 +1,14 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from main import app
+from src.modules.audit import service as audit_service
 from src.modules.audit.service import AuditAction, record_audit_event
+from src.core.config.settings import Settings
 
 
 class RecordingSession:
@@ -38,6 +41,21 @@ class AuditLogContractTests(unittest.TestCase):
                 target_type="billing",
                 metadata={"provider": "stripe", "sessionId": "bps_secret"},
             )
+
+    def test_disabled_audit_log_does_not_persist_new_events(self):
+        session = RecordingSession()
+        disabled_settings = Settings(**{**audit_service.settings.__dict__, "audit_log_enabled": False})
+        with patch.object(audit_service, "settings", disabled_settings):
+            event = record_audit_event(
+                session,
+                organization_id=uuid4(),
+                actor_user_id=uuid4(),
+                action=AuditAction.BILLING_PORTAL_CREATED,
+                target_type="billing",
+                metadata={"provider": "stripe"},
+            )
+        self.assertIsNone(event)
+        self.assertEqual(session.added, [])
 
     def test_owner_admin_audit_endpoint_is_registered(self):
         with TestClient(app) as client:

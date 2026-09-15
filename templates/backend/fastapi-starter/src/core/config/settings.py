@@ -28,6 +28,9 @@ class Settings:
     cors_origins_raw: str = os.getenv("CORS_ORIGINS", os.getenv("FRONTEND_URL", "http://localhost:3000"))
     redis_url: str | None = os.getenv("REDIS_URL")
     rate_limit_enabled: bool = _bool("RATE_LIMIT_ENABLED", True)
+    # Audit logging is enabled by default. Set AUDIT_LOG_ENABLED=false to stop
+    # recording new events while keeping the audit schema and historical data.
+    audit_log_enabled: bool = _bool("AUDIT_LOG_ENABLED", True)
     rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", os.getenv("RATE_LIMIT_MAX", "30")))
     rate_limit_window_seconds: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     auth_rate_limit_requests: int = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "5"))

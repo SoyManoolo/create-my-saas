@@ -246,6 +246,11 @@ creación efectiva de Checkout o Portal. Sólo owners y administradores pueden
 consultarlo con `GET /organizations/:organizationId/audit-logs`. `limit` vale 50
 por defecto (máximo 100) y `cursor` continúa desde `nextCursor`.
 
+El registro está activo por defecto. Usa `AUDIT_LOG_ENABLED=false` para dejar
+de guardar eventos nuevos sin afectar las operaciones de negocio, borrar la
+tabla ni ocultar el histórico. Al devolverlo a `true` se reanuda el registro
+sin migraciones.
+
 Cada evento conserva organización, actor, acción, objetivo, fecha y metadatos
 específicos permitidos por una allowlist. Nunca se guardan tokens o hashes,
 payloads de petición/proveedor, credenciales, IDs de cliente/sesión/suscripción

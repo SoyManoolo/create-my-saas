@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { AppError } from '../common/errors/app.error';
@@ -35,16 +36,20 @@ const allowedMetadata: Record<AuditAction, ReadonlySet<string>> = {
 
 @Injectable()
 export class AuditLogService {
-  constructor(@InjectRepository(AuditLog) private readonly logs: Repository<AuditLog>) {}
+  constructor(
+    @InjectRepository(AuditLog) private readonly logs: Repository<AuditLog>,
+    private readonly config: ConfigService,
+  ) {}
 
   /** Persist only allowlisted scalar metadata; never pass request/provider payloads here. */
-  async record(input: AuditInput, manager?: EntityManager): Promise<AuditLog> {
+  async record(input: AuditInput, manager?: EntityManager): Promise<AuditLog | null> {
     const metadata = input.metadata ?? {};
     const unexpected = Object.keys(metadata).filter((key) => !allowedMetadata[input.action].has(key));
     if (unexpected.length) throw new Error(`Audit metadata is not allowed for ${input.action}: ${unexpected.sort().join(', ')}`);
     if (Object.values(metadata).some((value) => value !== null && !['string', 'number', 'boolean'].includes(typeof value))) {
       throw new Error('Audit metadata values must be scalar.');
     }
+    if (!this.config.get<boolean>('AUDIT_LOG_ENABLED', true)) return null;
     const repository = manager?.getRepository(AuditLog) ?? this.logs;
     return repository.save(repository.create({
       organizationId: input.organizationId,
