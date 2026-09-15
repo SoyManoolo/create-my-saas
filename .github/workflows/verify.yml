@@ -224,6 +224,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_starter
       SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
+      POSTGRES_INTEGRATION_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -261,6 +262,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
       SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
+      POSTGRES_INTEGRATION_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -1,12 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApplication } from './../src/app.setup';
 import { SecureEmailService } from './../src/auth/secure-email.service';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { OAuthState } from './../src/auth/oauth-state.entity';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -28,6 +31,11 @@ describe('AppController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     configureApplication(app);
     await app.init();
+    await resetDatabase(app.get(DataSource));
+
+    if (process.env.POSTGRES_INTEGRATION_TESTS === '1') {
+      expect(app.get(DataSource).options.type).toBe('postgres');
+    }
   });
 
   it('/ (GET)', async () => {
@@ -225,6 +233,80 @@ describe('AppController (e2e)', () => {
     ]);
   });
 
+  it('atomically rotates a refresh credential under concurrent replay attempts', async () => {
+    const credentials = { email: 'refresh-race@example.com', password: 'password123', name: 'Refresh race' };
+    await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
+    const login = await request(app.getHttpServer()).post('/auth/login').send(loginPayload(credentials)).expect(200);
+    const original = cookieValues(login);
+
+    const attempts = await Promise.all([
+      request(app.getHttpServer()).post('/auth/refresh').set('Cookie', original.header).set('X-CSRF-Token', original.csrf),
+      request(app.getHttpServer()).post('/auth/refresh').set('Cookie', original.header).set('X-CSRF-Token', original.csrf),
+    ]);
+    expect(attempts.map((attempt) => attempt.status).sort()).toEqual([200, 401]);
+    const winner = attempts.find((attempt) => attempt.status === 200);
+    if (!winner) throw new Error('One concurrent refresh attempt must rotate the session.');
+    const replacement = cookieValues(winner);
+
+    // The losing claim revokes all active sessions, including the token the
+    // winner just issued. A captured refresh cookie therefore cannot survive
+    // a replay race.
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', replacement.header)
+      .set('X-CSRF-Token', replacement.csrf)
+      .expect(401);
+  });
+
+  it('persists an S256 PKCE state in PostgreSQL and permits exactly one OAuth callback', async () => {
+    const config = app.get(ConfigService);
+    config.set('OAUTH_ENABLED', true);
+    config.set('OAUTH_GOOGLE_CLIENT_ID', 'e2e-google-client');
+    config.set('OAUTH_GOOGLE_CLIENT_SECRET', 'e2e-google-secret');
+    config.set('OAUTH_GOOGLE_AUTHORIZATION_URL', 'https://oauth.test/authorize');
+    config.set('OAUTH_GOOGLE_TOKEN_URL', 'https://oauth.test/token');
+    config.set('OAUTH_GOOGLE_USERINFO_URL', 'https://oauth.test/userinfo');
+    config.set('OAUTH_GOOGLE_REDIRECT_URI', 'https://api.test/auth/oauth/google/callback');
+    const start = await request(app.getHttpServer()).get('/auth/oauth/google').expect(200);
+    const authorizationUrl = new URL(start.body.authorizationUrl);
+    const state = authorizationUrl.searchParams.get('state');
+    const challenge = authorizationUrl.searchParams.get('code_challenge');
+    expect(authorizationUrl.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(state).toEqual(expect.any(String));
+    expect(challenge).toEqual(expect.any(String));
+
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(async (url, options) => {
+      if (String(url) === 'https://oauth.test/token') {
+        expect(String(options?.body)).toContain('code_verifier=');
+        return new Response(JSON.stringify({ access_token: 'provider-access-token' }), { status: 200 });
+      }
+      if (String(url) === 'https://oauth.test/userinfo') {
+        return new Response(JSON.stringify({ sub: 'google-subject-1', email: 'oauth@example.com', email_verified: true, name: 'OAuth User' }), { status: 200 });
+      }
+      throw new Error(`Unexpected OAuth request: ${String(url)}`);
+    });
+
+    try {
+      const callbacks = await Promise.all([
+        request(app.getHttpServer()).get(`/auth/oauth/google/callback?code=code-1&state=${encodeURIComponent(state ?? '')}`),
+        request(app.getHttpServer()).get(`/auth/oauth/google/callback?code=code-1&state=${encodeURIComponent(state ?? '')}`),
+      ]);
+      expect(callbacks.map((callback) => callback.status).sort()).toEqual([303, 400]);
+      expect(callbacks.find((callback) => callback.status === 400)?.body).toEqual({
+        error: { code: 'OAUTH_STATE_INVALID', message: expect.any(String) },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      const stored = await app.get(DataSource).getRepository(OAuthState).findOneByOrFail({
+        stateHash: createHash('sha256').update(state ?? '').digest('hex'),
+      });
+      expect(stored.usedAt).toBeInstanceOf(Date);
+      expect(createHash('sha256').update(stored.codeVerifier).digest('base64url')).toBe(challenge);
+      expect(authorizationUrl.toString()).not.toContain(stored.codeVerifier);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
   it('transfers organization ownership only to an active member and lets the previous owner leave', async () => {
     const owner = await registerAndLogin(app, { email: 'org-owner@example.com', password: 'password123', name: 'Owner' });
     const admin = await registerAndLogin(app, { email: 'org-admin@example.com', password: 'password123', name: 'Admin' });
@@ -380,3 +462,12 @@ async function registerAndLogin(
   const login = await request(app.getHttpServer()).post('/auth/login').send(loginPayload(credentials)).expect(200);
   return { userId: registration.body.id, accessToken: login.body.accessToken };
 }
+
+async function resetDatabase(dataSource: DataSource): Promise<void> {
+  if (dataSource.options.type === 'postgres') {
+    await dataSource.query('TRUNCATE TABLE "billing_webhook_events", "users" RESTART IDENTITY CASCADE');
+    return;
+  }
+  await dataSource.synchronize(true);
+}
+
