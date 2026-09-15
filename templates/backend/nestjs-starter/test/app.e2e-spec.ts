@@ -7,9 +7,10 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApplication } from './../src/app.setup';
 import { SecureEmailService } from './../src/auth/secure-email.service';
-import { randomUUID } from 'node:crypto';
-import { createHash } from 'node:crypto';
-import { OAuthState } from './../src/auth/oauth-state.entity';
+import { createHash, randomUUID } from 'node:crypto';
+import { AuthService } from '../src/auth/auth.service';
+import { OAuthAccount } from '../src/auth/oauth-account.entity';
+import { OAuthState } from '../src/auth/oauth-state.entity';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -233,6 +234,47 @@ describe('AppController (e2e)', () => {
     ]);
   });
 
+  it('exchanges PKCE state once, persists provider subjects, and rejects identity conflicts', async () => {
+    const config = app.get(ConfigService);
+    const auth = app.get(AuthService);
+    const database = app.get(DataSource);
+    config.set('OAUTH_ENABLED', true);
+    config.set('OAUTH_GOOGLE_CLIENT_ID', 'google-client');
+    config.set('OAUTH_GOOGLE_CLIENT_SECRET', 'google-secret');
+    config.set('OAUTH_GOOGLE_REDIRECT_URI', 'http://localhost:3001/auth/oauth/google/callback');
+    const originalFetch = globalThis.fetch;
+    const requests: RequestInit[] = [];
+    try {
+      const start = await auth.oauthStart('google');
+      const url = new URL(start.authorizationUrl);
+      const state = url.searchParams.get('state')!;
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+      const stateRecord = (await database.getRepository(OAuthState).find()).at(-1);
+      expect(stateRecord).toBeDefined();
+      globalThis.fetch = (async (_input, init) => {
+        requests.push(init!);
+        if (init?.method === 'POST') return { ok: true, json: async () => ({ access_token: 'provider-token' }) } as Response;
+        return { ok: true, json: async () => ({ sub: 'google-subject-1', email: 'person@example.com', email_verified: true, name: 'Person' }) } as Response;
+      }) as typeof fetch;
+      const result = await auth.oauthCallback('google', state, 'code');
+      expect(result.refreshToken).toEqual(expect.any(String));
+      expect((requests[0]?.body as URLSearchParams).get('code_verifier')).toBe(stateRecord!.codeVerifier);
+      const account = await database.getRepository(OAuthAccount).findOneByOrFail({ provider: 'google', providerAccountId: 'google-subject-1' });
+      expect(account.userId).toBe(result.authentication.user.id);
+      await expect(auth.oauthCallback('google', state, 'code')).rejects.toMatchObject({ code: 'OAUTH_STATE_INVALID' });
+
+      await request(app.getHttpServer()).post('/auth/register').send({ email: 'other@example.com', password: 'password123', name: 'Other' }).expect(201);
+      const conflictState = new URL((await auth.oauthStart('google')).authorizationUrl).searchParams.get('state')!;
+      globalThis.fetch = (async (_input, init) => {
+        if (init?.method === 'POST') return { ok: true, json: async () => ({ access_token: 'provider-token' }) } as Response;
+        return { ok: true, json: async () => ({ sub: 'google-subject-1', email: 'other@example.com', email_verified: true, name: 'Other' }) } as Response;
+      }) as typeof fetch;
+      await expect(auth.oauthCallback('google', conflictState, 'code')).rejects.toMatchObject({ code: 'OAUTH_ACCOUNT_CONFLICT' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('atomically rotates a refresh credential under concurrent replay attempts', async () => {
     const credentials = { email: 'refresh-race@example.com', password: 'password123', name: 'Refresh race' };
     await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
@@ -307,6 +349,7 @@ describe('AppController (e2e)', () => {
       fetchMock.mockRestore();
     }
   });
+
   it('transfers organization ownership only to an active member and lets the previous owner leave', async () => {
     const owner = await registerAndLogin(app, { email: 'org-owner@example.com', password: 'password123', name: 'Owner' });
     const admin = await registerAndLogin(app, { email: 'org-admin@example.com', password: 'password123', name: 'Admin' });
@@ -470,4 +513,3 @@ async function resetDatabase(dataSource: DataSource): Promise<void> {
   }
   await dataSource.synchronize(true);
 }
-

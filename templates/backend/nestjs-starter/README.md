@@ -198,6 +198,10 @@ entorno lo exige. El frontend empieza el flujo en `GET /auth/oauth/google` o
 cookies y redirige, sin token en la URL, a
 `FRONTEND_URL/auth/oauth/callback`. La implementación usa state de un solo uso
 y PKCE; el proveedor debe devolver una dirección de correo válida y verificada.
+El primer acceso crea una vinculación `oauth_accounts` entre el sujeto inmutable
+del proveedor y el usuario local; los accesos posteriores resuelven esa
+vinculación antes que el email. Si ambos identificadores apuntan a usuarios
+distintos, el callback devuelve `OAUTH_ACCOUNT_CONFLICT` y no fusiona cuentas.
 
 ## Stripe Billing
 

@@ -48,7 +48,8 @@ Email endpoints never return opaque tokens. Configure `EMAIL_DELIVERY_URL` and
 shared authenticated HTTPS adapter; production and staging refuse to start without
 them. The adapter receives `POST` JSON `{ to, subject, text }` with a Bearer token and
 a 10-second timeout. In development and tests, leaving both values empty suppresses
-delivery. Google and GitHub OAuth use signed state, PKCE and verified provider
+delivery. Google and GitHub OAuth use signed state, PKCE, a stable provider
+subject persisted in `oauth_accounts`, and verified provider
 email; callbacks write the refresh credential only as an HttpOnly cookie before a
 token-free redirect to the frontend. Provider client credentials remain environment
 values. Redis is installed by default. Production and staging require
