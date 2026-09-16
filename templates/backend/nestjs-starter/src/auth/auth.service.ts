@@ -144,9 +144,12 @@ export class AuthService {
     const config = this.oauthConfig(provider);
     if (!config) throw new AppError('OAUTH_PROVIDER_UNAVAILABLE', 'This OAuth provider is not configured.', 404);
     if (!code) throw new AppError('OAUTH_CALLBACK_INVALID', 'OAuth authorization code is required.', 400);
-    const record = await this.oauthStates.findOneBy({ provider, stateHash: this.hashToken(state), usedAt: IsNull() });
-    if (!record || record.expiresAt <= new Date()) throw new AppError('OAUTH_STATE_INVALID', 'OAuth state is invalid or expired.', 400);
-    const used = await this.oauthStates.update({ id: record.id, usedAt: IsNull() }, { usedAt: new Date() });
+    const now = new Date();
+    const record = await this.oauthStates.findOneBy({ provider, stateHash: this.hashToken(state), usedAt: IsNull(), expiresAt: MoreThan(now) });
+    if (!record) throw new AppError('OAUTH_STATE_INVALID', 'OAuth state is invalid or expired.', 400);
+    // Expiration is part of the conditional claim so a state cannot cross its
+    // deadline between lookup and consumption.
+    const used = await this.oauthStates.update({ id: record.id, usedAt: IsNull(), expiresAt: MoreThan(now) }, { usedAt: now });
     if (!used.affected) throw new AppError('OAUTH_STATE_INVALID', 'OAuth state was already used.', 400);
     const profile = await this.exchangeOAuthProfile(provider, code, record.codeVerifier, config);
     const account = await this.oauthAccounts.findOneBy({ provider, providerAccountId: profile.providerAccountId });
@@ -157,7 +160,19 @@ export class AuthService {
       if (!user) throw new AppError('OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.', 409);
       return this.completeOAuthAuthentication(user);
     }
-    const user = emailUser ?? await this.usersService.create({ email: profile.email, name: profile.name, passwordHash: null });
+    // A first OAuth login races on both the local email and the provider
+    // subject. Resolve each unique-key race independently; a user insert can
+    // fail before the OAuth-account insert is attempted.
+    let user = emailUser;
+    if (!user) {
+      try {
+        user = await this.usersService.create({ email: profile.email, name: profile.name, passwordHash: null });
+      } catch (error) {
+        if (!this.isUniqueViolation(error)) throw error;
+        user = await this.usersService.findByEmail(profile.email);
+        if (!user) throw error;
+      }
+    }
     try {
       const linked = await this.oauthAccounts.save(this.oauthAccounts.create({ provider, providerAccountId: profile.providerAccountId, userId: user.id }));
       if (linked.userId !== user.id) throw new AppError('OAUTH_ACCOUNT_CONFLICT', 'This OAuth account is linked to a different user.', 409);
@@ -252,5 +267,9 @@ export class AuthService {
   private newOpaqueToken(): string { return randomBytes(48).toString('base64url'); }
   private hashToken(value: string): string { return createHash('sha256').update(value).digest('hex'); }
   private sessionIdFromToken(token: string): string { const b = createHash('sha256').update(token).digest(); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; const h = b.toString('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20,32)}`; }
-  private isUniqueViolation(error: unknown): boolean { return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'; }
+  private isUniqueViolation(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) return false;
+    const databaseError = error as { code?: unknown; message?: unknown };
+    return databaseError.code === '23505' || (typeof databaseError.message === 'string' && /unique constraint/i.test(databaseError.message));
+  }
 }
