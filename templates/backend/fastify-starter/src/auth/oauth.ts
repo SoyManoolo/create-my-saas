@@ -96,10 +96,17 @@ export async function exchangeOAuthProfile(
   }
   const headers = { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json', 'User-Agent': 'create-my-saas' };
   const profile = await oauthJson(config.userInfoUrl, { headers }) as Record<string, unknown>;
-  if (provider === 'github' && !profile.email) {
+  if (provider === 'github') {
     const emails = await oauthJson('https://api.github.com/user/emails', { headers });
     if (Array.isArray(emails)) {
-      profile.email = (emails as Array<Record<string, unknown>>).find((entry) => entry.primary === true && entry.verified === true)?.email;
+      const verifiedEmails = emails as Array<Record<string, unknown>>;
+      if (profile.email) {
+        if (!verifiedEmails.some((entry) => entry.email === profile.email && entry.verified === true)) profile.email = undefined;
+      } else {
+        profile.email = verifiedEmails.find((entry) => entry.primary === true && entry.verified === true)?.email;
+      }
+    } else {
+      profile.email = undefined;
     }
   }
   const verified = provider === 'google' ? profile.email_verified === true : Boolean(profile.email);

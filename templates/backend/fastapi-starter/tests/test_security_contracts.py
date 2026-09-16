@@ -118,10 +118,19 @@ class SecurityContractTests(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "verified email"):
                 asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
 
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"sub": "google-subject-1", "email": "person@example.com"}]):
+            with self.assertRaisesRegex(Exception, "verified email"):
+                asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
+
     def test_github_oauth_uses_primary_verified_email_endpoint(self):
         with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"id": 42, "login": "octocat"}, [{"email": "person@example.com", "primary": True, "verified": True}]]):
             profile = asyncio.run(exchange_profile("github", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
         self.assertEqual((profile.email, profile.name, profile.provider_account_id), ("person@example.com", "octocat", "42"))
+
+    def test_github_oauth_rejects_an_unverified_email_from_userinfo(self):
+        with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"id": 42, "email": "person@example.com", "login": "octocat"}, [{"email": "person@example.com", "primary": True, "verified": False}]]):
+            with self.assertRaisesRegex(Exception, "verified email"):
+                asyncio.run(exchange_profile("github", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
 
     def test_oauth_rejects_profiles_without_stable_subjects(self):
         with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": True}]):

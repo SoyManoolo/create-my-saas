@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { createApp } from '../src/app.js';
+import { exchangeOAuthProfile } from '../src/auth/oauth.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { EmailDeliveryError, SecureEmailSender, type EmailSender } from '../src/email.js';
 import type { OneTimeTokenKind, SessionRepository, StoredOAuthAccount, StoredOAuthState, StoredOneTimeToken, StoredSession, StoredUser } from '../src/types.js';
@@ -413,5 +414,26 @@ test('OAuth persists a stable provider account, exchanges PKCE, and rejects stat
   } finally {
     globalThis.fetch = originalFetch;
     await app.close();
+  }
+});
+
+test('GitHub rejects an unverified email returned by /user', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (input, init) => {
+      if (init?.method === 'POST') return { ok: true, json: async () => ({ access_token: 'provider-token' }) } as Response;
+      if (String(input).endsWith('/user')) return { ok: true, json: async () => ({ id: 42, email: 'person@example.com', login: 'octocat' }) } as Response;
+      return { ok: true, json: async () => ([{ email: 'person@example.com', primary: true, verified: false }]) } as Response;
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () => exchangeOAuthProfile('github', 'code', 'verifier', {
+        clientId: 'id', clientSecret: 'secret', tokenUrl: 'https://provider.test/token',
+        userInfoUrl: 'https://provider.test/user', redirectUri: 'https://api.test/callback', scopes: 'read:user user:email',
+      }),
+      (error: { code?: string }) => error.code === 'OAUTH_EMAIL_UNVERIFIED',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

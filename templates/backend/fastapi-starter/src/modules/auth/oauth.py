@@ -81,11 +81,17 @@ async def exchange_profile(provider: str, code: str, verifier: str, config: dict
         raise AppError("The OAuth provider did not return an access token.", code="OAUTH_PROVIDER_ERROR", status_code=502)
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json", "User-Agent": "create-my-saas"}
     profile = await asyncio.to_thread(_json_request, config["userinfo_url"], headers=headers)
-    if provider == "github" and not profile.get("email"):
-        emails = await asyncio.to_thread(_json_request, "https://api.github.com/user/emails", headers=headers)
-        profile["email"] = next((entry.get("email") for entry in emails if entry.get("primary") and entry.get("verified")), None)
     email = profile.get("email")
-    verified = profile.get("email_verified", True) if provider == "google" else bool(email)
+    if provider == "github":
+        emails = await asyncio.to_thread(_json_request, "https://api.github.com/user/emails", headers=headers)
+        verified_emails = [entry for entry in emails if isinstance(entry, dict)] if isinstance(emails, list) else []
+        if email:
+            verified = any(entry.get("email") == email and entry.get("verified") is True for entry in verified_emails)
+        else:
+            email = next((entry.get("email") for entry in verified_emails if entry.get("primary") and entry.get("verified") is True), None)
+            verified = bool(email)
+    else:
+        verified = profile.get("email_verified") is True
     if not isinstance(email, str) or not email or not verified:
         raise AppError("The OAuth provider did not provide a verified email address.", code="OAUTH_EMAIL_UNVERIFIED", status_code=400)
     provider_account_id = profile.get("sub") if provider == "google" else profile.get("id")
