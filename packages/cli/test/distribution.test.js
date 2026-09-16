@@ -36,7 +36,7 @@ test('the published package contains the executable and template catalog', () =>
   const [packageDetails] = JSON.parse(output);
   const packedPaths = new Set(packageDetails.files.map(({ path }) => path));
 
-  assert.equal(packageDetails.name, 'create-my-saas');
+  assert.equal(packageDetails.name, '@soymanoolo/create-my-saas');
   assert.equal(packedPaths.has('LICENSE'), true);
   assert.equal(packedPaths.has('packages/cli/bin/create-my-saas.js'), true);
   assert.equal(packedPaths.has('packages/cli/src/catalog.js'), true);

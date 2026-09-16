@@ -1,8 +1,19 @@
 {
-  "name": "create-my-saas",
+  "name": "@soymanoolo/create-my-saas",
   "version": "0.1.0",
   "description": "Generate a SaaS project from versioned backend and frontend starter templates.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SoyManoolo/create-my-saas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SoyManoolo/create-my-saas/issues"
+  },
+  "homepage": "https://github.com/SoyManoolo/create-my-saas#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "create-my-saas": "./packages/cli/bin/create-my-saas.js"

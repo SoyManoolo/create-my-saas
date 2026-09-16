@@ -90,7 +90,7 @@ node packages/cli/bin/create-my-saas.js --list
 Tras publicar el paquete, el mismo flujo será:
 
 ```sh
-npx create-my-saas@latest my-saas --backend nestjs --frontend nextjs
+npx @soymanoolo/create-my-saas@latest my-saas --backend nestjs --frontend nextjs
 ```
 
 La CLI no sobrescribe directorios existentes. Cada proyecto generado incluye
@@ -145,13 +145,16 @@ permisos y el estado de billing sin Stripe. Astro sin la feature `billing` no
 expone rutas de organizaciones ni facturación; Fastify + Astro cubre sólo los
 flujos que declara ese backend.
 
-La distribución de npm ya está preparada para incluir la CLI, las plantillas y
-la documentación, y excluir dependencias y compilados. La publicación y las
-releases automatizadas forman parte del trabajo pendiente.
+La distribución de npm incluye la CLI, las plantillas y la documentación, y
+excluye dependencias y compilados. Los tags `vX.Y.Z` publican la misma versión
+en npm y crean su GitHub Release; `v0.1.0`, que arranca el paquete y la relación
+de confianza, comprueba la publicación manual y crea solo la Release. Consulta
+la [guía de releases](./docs/releasing.md).
 
 ## Documentación adicional
 
 - [Contrato de los manifiestos](./docs/template-manifests.md)
+- [Publicar una release de la CLI](./docs/releasing.md)
 - [Despliegue reproducible](./docs/deployment.md)
 - [Contrato operativo común de FastAPI, NestJS y Fastify](./templates/backend/backend-infrastructure-contract.md)
 - [FastAPI](./templates/backend/fastapi-starter/README.md), [NestJS](./templates/backend/nestjs-starter/README.md) y [Fastify](./templates/backend/fastify-starter/README.md)
