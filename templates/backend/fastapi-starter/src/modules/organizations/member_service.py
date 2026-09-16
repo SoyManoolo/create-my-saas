@@ -25,6 +25,7 @@ async def list_members(org_id: UUID, user: User, db: AsyncSession):
     ).all()
     return [
         {
+            "id": str(membership.id),
             "user_id": str(membership.user_id),
             "email": member.email,
             "name": member.name,
