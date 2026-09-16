@@ -90,7 +90,7 @@ node packages/cli/bin/create-my-saas.js --list
 Tras publicar el paquete, el mismo flujo será:
 
 ```sh
-npx @soymanoolo/create-my-saas@latest my-saas --backend nestjs --frontend nextjs
+npx @soymanolo/create-my-saas@latest my-saas --backend nestjs --frontend nextjs
 ```
 
 La CLI no sobrescribe directorios existentes. Cada proyecto generado incluye

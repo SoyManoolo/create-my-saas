@@ -1,11 +1,11 @@
 {
-  "name": "@soymanoolo/create-my-saas",
+  "name": "@soymanolo/create-my-saas",
   "version": "0.1.0",
   "description": "Generate a SaaS project from the create-my-saas template catalog.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "create-my-saas": "./bin/create-my-saas.js"
+    "create-my-saas": "bin/create-my-saas.js"
   },
   "engines": {
     "node": ">=20"
