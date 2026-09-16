@@ -201,9 +201,17 @@ export class AuthService {
     if (typeof token.access_token !== 'string' || !token.access_token) throw new AppError('OAUTH_PROVIDER_ERROR', 'The OAuth provider did not return an access token.', 502);
     const headers = { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json', 'User-Agent': 'create-my-saas' };
     const profile = await this.oauthJson(config.userInfoUrl, { headers });
-    if (provider === 'github' && !profile.email) {
+    if (provider === 'github') {
       const emails = await this.oauthJson('https://api.github.com/user/emails', { headers }) as Array<Record<string, unknown>>;
-      profile.email = emails.find((item) => item.primary === true && item.verified === true)?.email;
+      if (Array.isArray(emails)) {
+        if (profile.email) {
+          if (!emails.some((item) => item.email === profile.email && item.verified === true)) profile.email = undefined;
+        } else {
+          profile.email = emails.find((item) => item.primary === true && item.verified === true)?.email;
+        }
+      } else {
+        profile.email = undefined;
+      }
     }
     const verified = provider === 'google' ? profile.email_verified === true : Boolean(profile.email);
     if (typeof profile.email !== 'string' || !profile.email || !verified) throw new AppError('OAUTH_EMAIL_UNVERIFIED', 'The OAuth provider did not provide a verified email address.', 400);
