@@ -11,6 +11,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AuthService } from '../src/auth/auth.service';
 import { OAuthAccount } from '../src/auth/oauth-account.entity';
 import { OAuthState } from '../src/auth/oauth-state.entity';
+import { UsersService } from '../src/users/users.service';
+import { User } from '../src/users/user.entity';
+import { BillingCustomer } from '../src/billing/billing-customer.entity';
+import { BillingWebhookEvent } from '../src/billing/billing-webhook-event.entity';
+import Stripe from 'stripe';
+import { jest } from '@jest/globals';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -29,7 +35,7 @@ describe('AppController (e2e)', () => {
       })
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ rawBody: true });
     configureApplication(app);
     await app.init();
     await resetDatabase(app.get(DataSource));
@@ -348,6 +354,94 @@ describe('AppController (e2e)', () => {
     } finally {
       fetchMock.mockRestore();
     }
+  });
+
+  it('rejects expired GitHub state before contacting GitHub and converges concurrent first links', async () => {
+    const config = app.get(ConfigService);
+    const auth = app.get(AuthService);
+    const database = app.get(DataSource);
+    const users = app.get(UsersService);
+    config.set('OAUTH_ENABLED', true);
+    config.set('OAUTH_GITHUB_CLIENT_ID', 'github-client');
+    config.set('OAUTH_GITHUB_CLIENT_SECRET', 'github-secret');
+    config.set('OAUTH_GITHUB_AUTHORIZATION_URL', 'https://github.test/authorize');
+    config.set('OAUTH_GITHUB_TOKEN_URL', 'https://github.test/token');
+    config.set('OAUTH_GITHUB_USERINFO_URL', 'https://github.test/user');
+    config.set('OAUTH_GITHUB_REDIRECT_URI', 'https://api.test/auth/oauth/github/callback');
+
+    const expiredState = 'expired-github-state';
+    await database.getRepository(OAuthState).save({
+      id: randomUUID(), provider: 'github', stateHash: createHash('sha256').update(expiredState).digest('hex'),
+      codeVerifier: 'v'.repeat(86), expiresAt: new Date(Date.now() - 1_000), usedAt: null,
+    });
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(async () => {
+      throw new Error('An expired OAuth state must not contact GitHub.');
+    });
+    await expect(auth.oauthCallback('github', expiredState, 'expired-code')).rejects.toMatchObject({ code: 'OAUTH_STATE_INVALID' });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const [first, second] = await Promise.all([auth.oauthStart('github'), auth.oauthStart('github')]);
+    const states = [first, second].map(({ authorizationUrl }) => new URL(authorizationUrl).searchParams.get('state')!);
+    const originalFindByEmail = users.findByEmail.bind(users);
+    let pendingReads = 0;
+    let releaseReads!: () => void;
+    const bothReads = new Promise<void>((resolve) => { releaseReads = resolve; });
+    const findByEmail = jest.spyOn(users, 'findByEmail').mockImplementation(async (...args) => {
+      if (args[0] === 'first-link@example.com' && ++pendingReads <= 2) {
+        if (pendingReads === 2) releaseReads();
+        await bothReads;
+      }
+      return originalFindByEmail(...args);
+    });
+    fetchMock.mockImplementation(async (url, options) => {
+      if (String(url) === 'https://github.test/token') {
+        expect(options?.method).toBe('POST');
+        return new Response(JSON.stringify({ access_token: 'github-access' }), { status: 200 });
+      }
+      if (String(url) === 'https://github.test/user') {
+        return new Response(JSON.stringify({ id: 100, login: 'first-link' }), { status: 200 });
+      }
+      if (String(url) === 'https://api.github.com/user/emails') {
+        return new Response(JSON.stringify([{ email: 'first-link@example.com', primary: true, verified: true }]), { status: 200 });
+      }
+      throw new Error(`Unexpected OAuth request: ${String(url)}`);
+    });
+    try {
+      const results = await Promise.all(states.map((state) => auth.oauthCallback('github', state, 'code')));
+      expect(results).toHaveLength(2);
+      expect(await database.getRepository(User).countBy({ email: 'first-link@example.com' })).toBe(1);
+      expect(await database.getRepository(OAuthAccount).countBy({ provider: 'github', providerAccountId: '100' })).toBe(1);
+    } finally {
+      findByEmail.mockRestore();
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('verifies raw Stripe signatures and persists each webhook delivery exactly once', async () => {
+    const config = app.get(ConfigService);
+    const owner = await registerAndLogin(app, { email: 'billing-owner@example.com', password: 'password123', name: 'Billing owner' });
+    const organization = await request(app.getHttpServer())
+      .post('/organizations')
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ name: 'Webhook persistence' })
+      .expect(201);
+    const stripeKey = 'sk_test_123456789012345678901234';
+    const webhookSecret = 'whsec_webhook_persistence';
+    config.set('STRIPE_SECRET_KEY', stripeKey);
+    config.set('STRIPE_WEBHOOK_SECRET', webhookSecret);
+    config.set('STRIPE_PRICE_PLANS', '{"price_pro":{"name":"pro","entitlements":{}}}');
+    const payload = JSON.stringify({
+      id: 'evt_webhook_persistence', object: 'event', type: 'checkout.session.completed',
+      data: { object: { object: 'checkout.session', metadata: { organization_id: organization.body.id }, client_reference_id: organization.body.id, customer: 'cus_webhook_persistence' } },
+    });
+    const signature = new Stripe(stripeKey).webhooks.generateTestHeaderString({ payload, secret: webhookSecret });
+
+    await request(app.getHttpServer()).post('/billing/webhooks/stripe').set('stripe-signature', signature).set('content-type', 'application/json').send(payload).expect(200, { accepted: true, duplicate: false });
+    await request(app.getHttpServer()).post('/billing/webhooks/stripe').set('stripe-signature', signature).set('content-type', 'application/json').send(payload).expect(200, { accepted: true, duplicate: true });
+
+    expect(await app.get(DataSource).getRepository(BillingWebhookEvent).countBy({ provider: 'stripe', providerEventId: 'evt_webhook_persistence' })).toBe(1);
+    await expect(app.get(DataSource).getRepository(BillingCustomer).findOneByOrFail({ provider: 'stripe', providerCustomerId: 'cus_webhook_persistence' }))
+      .resolves.toMatchObject({ organizationId: organization.body.id });
   });
 
   it('transfers organization ownership only to an active member and lets the previous owner leave', async () => {
