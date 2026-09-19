@@ -1,5 +1,5 @@
 {
-  "name": "@soymanolo/create-my-saas",
+  "name": "saas-starter",
   "version": "0.1.0",
   "description": "Generate a SaaS project from the create-my-saas template catalog.",
   "license": "MIT",

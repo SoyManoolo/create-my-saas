@@ -67,7 +67,7 @@ jobs:
           ' "$npm_version"
       - name: Confirm the bootstrap version was published manually
         if: github.ref_name == 'v0.1.0'
-        run: test "$(npm view @soymanolo/create-my-saas@0.1.0 version)" = "0.1.0"
+        run: test "$(npm view saas-starter@0.1.0 version)" = "0.1.0"
       - name: Publish the public package through npm trusted publishing
         if: github.ref_name != 'v0.1.0'
         run: npm publish
