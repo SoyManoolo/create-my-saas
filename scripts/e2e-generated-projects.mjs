@@ -197,11 +197,13 @@ async function verifyExternalProvidersAreIsolated() {
   await expectStatus(stripe, 503, 'the controlled Stripe provider must fail closed instead of calling a real service');
 }
 
+let generatedRoot;
 let generatedProject;
 let api;
 let web;
 try {
-  generatedProject = await mkdtemp(join(tmpdir(), `create-my-saas-${backend}-${frontend}-`));
+  generatedRoot = await mkdtemp(join(tmpdir(), `create-my-saas-${backend}-${frontend}-`));
+  generatedProject = join(generatedRoot, 'project');
   await run(process.execPath, [join(root, 'packages/cli/bin/create-my-saas.js'), generatedProject, '--backend', backend, '--frontend', frontend], { cwd: root });
 
   const backendDirectory = join(generatedProject, 'backend');
@@ -231,5 +233,5 @@ try {
 } finally {
   await stop(web);
   await stop(api);
-  if (generatedProject) await rm(generatedProject, { recursive: true, force: true });
+  if (generatedRoot) await rm(generatedRoot, { recursive: true, force: true });
 }
