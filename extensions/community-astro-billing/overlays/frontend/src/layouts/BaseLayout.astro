@@ -5,10 +5,12 @@ interface Props {
   title: string;
   description: string;
   protected?: boolean;
+  noindex?: boolean;
 }
 
-const { title, description, protected: protectedPage = false } = Astro.props;
+const { title, description, protected: protectedPage = false, noindex = false } = Astro.props;
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
+const robots = protectedPage || noindex ? 'noindex, nofollow, noarchive' : 'index, follow';
 ---
 
 <!doctype html>
@@ -17,13 +19,17 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content={robots} />
     <link rel="canonical" href={canonicalUrl} />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="LaunchKit" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
     <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
     <title>{title}</title>
   </head>
   <body data-protected={protectedPage ? '' : undefined}>
@@ -45,6 +51,8 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url);
     </footer>
     <script>
       import '../scripts/auth';
+      import { initializePostHog } from '../scripts/posthog';
+      document.addEventListener('DOMContentLoaded', initializePostHog);
     </script>
   </body>
 </html>

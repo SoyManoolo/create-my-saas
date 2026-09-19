@@ -377,6 +377,9 @@ test('generates Astro billing with NestJS and records the selected feature', (t)
     id: 'community:astro-billing', version: '1.0.0', source: 'community-astro-billing', manifestSchemaVersion: 1,
   }]);
   assert.match(readFileSync(join(destination, 'frontend', '.env.example'), 'utf8'), /^PUBLIC_POSTHOG_KEY=$/m);
+  const billingLayout = readFileSync(join(destination, 'frontend', 'src', 'layouts', 'BaseLayout.astro'), 'utf8');
+  assert.match(billingLayout, /noindex\?: boolean/);
+  assert.match(billingLayout, /initializePostHog/);
 });
 
 test('rejects an unknown template without creating output', (t) => {

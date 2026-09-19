@@ -8,7 +8,7 @@ function service(prefix: string): RateLimitService {
   return new RateLimitService(new ConfigService({
     NODE_ENV: 'test', RATE_LIMIT_ENABLED: true, RATE_LIMIT_REQUESTS: 30,
     RATE_LIMIT_WINDOW_SECONDS: 60, RATE_LIMIT_PREFIX: prefix, REDIS_URL: process.env.REDIS_URL,
-  }, { skipProcessEnv: true }));
+  }));
 }
 
 integration('Redis rate limits are shared by instances and reconnect after a controlled close', () => {

@@ -51,8 +51,7 @@ export class RateLimiter {
     const client = await this.redis(300);
     if (!client) return undefined;
     try {
-      const window = Math.floor(Date.now() / (seconds * 1_000));
-      const count = await within(client.eval(incrementScript, { keys: [`${this.config.RATE_LIMIT_PREFIX}:${key}:${window}`], arguments: [String(seconds)] }) as Promise<number>, 300);
+      const count = await within(client.eval(incrementScript, { keys: [`${this.config.RATE_LIMIT_PREFIX}:${key}`], arguments: [String(seconds)] }) as Promise<number>, 300);
       return Number(count) <= limit;
     } catch { this.markUnavailable(); return undefined; }
   }
