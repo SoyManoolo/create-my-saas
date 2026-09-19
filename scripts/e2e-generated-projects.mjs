@@ -216,7 +216,13 @@ async function verifyExternalProvidersAreIsolated() {
   }
 
   const stripe = await request('/billing/webhooks/stripe', { method: 'POST' });
-  await expectStatus(stripe, 503, 'the controlled Stripe provider must fail closed instead of calling a real service');
+  await expectStatus(
+    stripe,
+    frontend === 'astro' ? 404 : 503,
+    frontend === 'astro'
+      ? 'the lightweight Astro starter must not expose billing routes'
+      : 'the controlled Stripe provider must fail closed instead of calling a real service',
+  );
 }
 
 let generatedRoot;
