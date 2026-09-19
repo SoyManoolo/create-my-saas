@@ -4,7 +4,20 @@ This template provides a modular SaaS API: password and token authentication, ro
 refresh sessions, one-use verification/recovery tokens, profiles, organizations with
 RBAC invitations, organization audit logs, Stripe Checkout/Portal billing with verified webhooks, entitlements and trusted usage recording, and Redis-backed rate limiting.
 
-## Run it
+## Capacidades y compatibilidad
+
+FastAPI implementa todas las capacidades declaradas en `template.manifest.json`,
+incluidos usuarios, organizaciones, RBAC, Stripe, OAuth de Google y GitHub, y
+migraciones PostgreSQL. Es compatible con los frontends Next.js, React Router y
+Astro; Astro requiere `--feature billing` para usar organizaciones y facturación.
+
+## Requisitos
+
+- Python 3.13 o posterior y `uv`.
+- PostgreSQL accesible mediante `DATABASE_URL`.
+- Redis cuando se activen límites compartidos; es obligatorio en staging y producción.
+
+## Desarrollo local
 
 Copy `.env.example` to `.env`, set a real `SECRET_KEY` and database URL, then install
 the project dependencies with `uv sync`. Apply the initial schema with:
@@ -13,6 +26,14 @@ the project dependencies with `uv sync`. Apply the initial schema with:
 uv run alembic upgrade head
 uv run fastapi dev main.py
 ```
+
+## Configuración
+
+Copia `.env.example` a `.env`. `DATABASE_URL`, `SECRET_KEY`, `FRONTEND_URL` y
+`CORS_ORIGINS` son obligatorias. La infraestructura, correo, OAuth, Redis y
+Stripe se configuran con las variables documentadas en `.env.example`.
+
+## Verificación
 
 Run the dependency-free test entry point after syncing with:
 
@@ -55,6 +76,12 @@ token-free redirect to the frontend. Provider client credentials remain environm
 values. Redis is installed by default. Production and staging require
 an available `rediss://` endpoint; development can fall back to an in-process limiter
 when Redis is deliberately unavailable.
+
+## Límites deliberados
+
+No incorpora entidades ni reglas de negocio del producto final. La configuración
+de Stripe, correo y proveedores OAuth pertenece a cada despliegue; sin sus
+credenciales, esas integraciones permanecen desactivadas.
 
 ## Sensitive-action audit log
 

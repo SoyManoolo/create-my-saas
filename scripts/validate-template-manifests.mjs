@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { resolve, relative, sep } from 'node:path';
+import { dirname, resolve, relative, sep } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const templatesRoot = resolve(root, 'templates');
@@ -16,6 +16,14 @@ const allowedCompatibilityFields = new Set(['requiresBackendCapabilities']);
 const allowedFeatureFields = new Set(['id', 'description', 'capabilities', 'requiresBackendCapabilities']);
 const allowedEnvironmentFields = new Set(['required']);
 const allowedVariableFields = new Set(['name', 'secret', 'description']);
+const requiredReadmeSections = [
+  'Capacidades y compatibilidad',
+  'Requisitos',
+  'Desarrollo local',
+  'Configuración',
+  'Verificación',
+  'Límites deliberados',
+];
 
 const failures = [];
 const manifests = [];
@@ -39,6 +47,44 @@ async function findManifests(directory) {
     if (entry.isFile() && entry.name === 'template.manifest.json') files.push(path);
   }
   return files;
+}
+
+async function validateTemplateDocumentation(file, manifest) {
+  const templateDirectory = dirname(file);
+  const readmePath = resolve(templateDirectory, 'README.md');
+  const environmentPath = resolve(templateDirectory, '.env.example');
+  let readme;
+  let environmentExample;
+
+  try {
+    readme = await readFile(readmePath, 'utf8');
+  } catch {
+    fail(file, 'requires a readable README.md.');
+    return;
+  }
+  try {
+    environmentExample = await readFile(environmentPath, 'utf8');
+  } catch {
+    fail(file, 'requires a readable .env.example.');
+    return;
+  }
+
+  if (!readme.includes('template.manifest.json')) {
+    fail(file, 'README.md must identify template.manifest.json as the capability contract.');
+  }
+  for (const section of requiredReadmeSections) {
+    if (!readme.includes(`## ${section}`)) {
+      fail(file, `README.md must include a "${section}" section.`);
+    }
+  }
+  for (const variable of manifest.environment.required) {
+    if (!readme.includes(variable.name)) {
+      fail(file, `README.md must document required environment variable "${variable.name}".`);
+    }
+    if (!new RegExp(`^${variable.name}=`, 'm').test(environmentExample)) {
+      fail(file, `.env.example must define required environment variable "${variable.name}".`);
+    }
+  }
 }
 
 function validateManifest(file, manifest) {
@@ -170,6 +216,7 @@ for (const file of files) {
   try {
     const manifest = JSON.parse(await readFile(file, 'utf8'));
     validateManifest(file, manifest);
+    await validateTemplateDocumentation(file, manifest);
     manifests.push({ file, id: manifest.id });
   } catch (error) {
     fail(file, `could not parse JSON (${error.message}).`);

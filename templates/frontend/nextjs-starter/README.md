@@ -2,7 +2,19 @@
 
 Frontend reutilizable para un SaaS, compatible con los backends que implementen el contrato común del proyecto. Incluye autenticación de navegador basada en refresh cookies `HttpOnly`, protección CSRF, sesión en memoria, rutas protegidas, registro, recuperación de contraseña, verificación de correo, OAuth Google/GitHub y cierre de sesión. No guarda access tokens en `localStorage` ni incorpora identidades de ejemplo.
 
-## Primer arranque
+## Capacidades y compatibilidad
+
+Implementa las capacidades declaradas en `template.manifest.json`: sesión de
+navegador, CSRF, recuperación, verificación, OAuth Google/GitHub, analítica con
+consentimiento, SEO y Stripe Billing. Requiere un backend con organizaciones y
+`billing.stripe`, por lo que es compatible con FastAPI y NestJS.
+
+## Requisitos
+
+- Node.js 20.9 o posterior y pnpm 11.
+- Un backend FastAPI o NestJS configurado y accesible desde `API_PROXY_TARGET`.
+
+## Desarrollo local
 
 1. Copia el entorno de ejemplo y apunta el proxy del servidor Next al backend elegido:
 
@@ -18,7 +30,18 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). `API_PROXY_TARGET` hace que Next reenvíe `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` conservando el mismo origen del navegador: así las cookies `HttpOnly` y la cookie CSRF funcionan correctamente. En producción configura el equivalente en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`. Define también `NEXT_PUBLIC_SITE_URL` con el dominio canónico de producción para generar los enlaces canonicals y los metadatos sociales absolutos.
+## Configuración
+
+`API_PROXY_TARGET` es obligatoria y hace que Next reenvíe `/auth/*`, `/users/*`,
+`/organizations/*` y `/billing/*` conservando el mismo origen del navegador.
+En producción configura el equivalente en el reverse proxy y usa HTTPS con
+`COOKIE_SECURE=true`. Define `NEXT_PUBLIC_SITE_URL` con el dominio canónico.
+
+## Verificación
+
+```bash
+pnpm build
+```
 
 ## SEO
 
@@ -49,3 +72,9 @@ El dashboard es deliberadamente neutral. Añade las entidades, vistas y navegaci
 ```bash
 node scripts/validate-template-manifests.mjs
 ```
+
+## Límites deliberados
+
+Es un dashboard autenticado y no un sitio público de marketing. No incluye
+entidades ni pantallas específicas del producto; añádelas sin cambiar el
+contrato de autenticación ni las capacidades declaradas.

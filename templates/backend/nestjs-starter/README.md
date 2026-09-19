@@ -6,6 +6,14 @@ de cuenta, OAuth de Google/GitHub y facturación opcional con Stripe. Las
 migraciones son la única forma de crear o modificar el esquema: TypeORM no usa
 `synchronize` fuera de las pruebas.
 
+## Capacidades y compatibilidad
+
+NestJS implementa las capacidades declaradas en `template.manifest.json`:
+sesiones, organizaciones, RBAC, invitaciones, auditoría, Stripe, OAuth,
+PostgreSQL, migraciones, CSRF, correo y rate limiting. Es compatible con Next.js,
+React Router y Astro; Astro necesita `--feature billing` para organizaciones y
+facturación.
+
 ## Requisitos
 
 - Node.js 22.14 o posterior (la imagen de producción usa Node 22.14).
@@ -44,7 +52,7 @@ valor de ejemplo ni lo guardes en el repositorio. `FRONTEND_URL` es la URL a la
 que terminan los callbacks OAuth y los enlaces de cuenta; `CORS_ORIGINS` es una
 lista separada por comas de orígenes de navegador autorizados.
 
-## Arranque local
+## Desarrollo local
 
 Con PostgreSQL creado y la URL de `.env` apuntando a esa base:
 
@@ -89,7 +97,7 @@ el target `migrate` para ejecutar `pnpm migration:run` con las variables de
 despliegue y el target final expone el puerto 8000. Mantén las credenciales en
 el gestor de secretos de la plataforma, no dentro de la imagen.
 
-## Pruebas y comprobaciones
+## Verificación
 
 ```sh
 pnpm test
@@ -103,7 +111,7 @@ fijan `NODE_ENV=test` y emplean una base `sql.js` efímera; no validan
 PostgreSQL, TLS, Redis ni proveedores OAuth/Stripe reales. Valida esos
 servicios en un entorno de integración antes de promocionar un despliegue.
 
-## Cookies, CORS y proxy inverso
+## Configuración: cookies, CORS y proxy inverso
 
 La sesión de navegador usa dos cookies:
 
@@ -261,6 +269,12 @@ payloads de petición/proveedor, credenciales, IDs de cliente/sesión/suscripci�
 de Stripe, medios de pago ni tarjetas. El email invitado sí se conserva para
 investigación de incidencias; antes de usar este registro para enterprise o
 compliance, define la retención y exportación exigidas por el producto.
+
+## Límites deliberados
+
+No incorpora entidades ni reglas de negocio del producto final. Stripe, correo,
+Redis y los proveedores OAuth requieren configuración propia en cada despliegue;
+sin ella, las integraciones quedan desactivadas o fallan de forma segura.
 
 ## Diagnóstico de fallos
 

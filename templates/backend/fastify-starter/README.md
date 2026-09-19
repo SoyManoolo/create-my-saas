@@ -7,7 +7,20 @@ opaque `accessToken`; keep it in memory and send it as `Authorization: Bearer`
 when calling protected endpoints. The frontend reads only the CSRF cookie and
 sends it in `X-CSRF-Token` for refresh and logout requests.
 
-## Start locally
+## Capacidades y compatibilidad
+
+Fastify implementa las capacidades declaradas en `template.manifest.json`:
+sesiones de navegador, recuperación, verificación de correo, OAuth Google/GitHub,
+CSRF, PostgreSQL, migraciones, correo transaccional y rate limiting. Es
+compatible con Astro en su área autenticada ligera.
+
+## Requisitos
+
+- Node.js 20 o posterior y pnpm.
+- PostgreSQL accesible mediante `DATABASE_URL`.
+- Redis para límites compartidos en staging y producción.
+
+## Desarrollo local
 
 ```sh
 cp .env.example .env
@@ -23,6 +36,19 @@ dependencies return a structured `503 SERVICE_NOT_READY` response.
 PostgreSQL must be running at `DATABASE_URL` before migrating.
 Set `DATABASE_SSL=true` with a certificate-verifying PostgreSQL endpoint in
 staging and production; the process refuses to start without it.
+
+## Configuración
+
+Copia `.env.example` a `.env`. `DATABASE_URL`, `SECRET_KEY`, `FRONTEND_URL` y
+`CORS_ORIGINS` son obligatorias. Configura correo, OAuth, Redis y cookies con las
+variables de `.env.example` antes de activarlos fuera de desarrollo.
+
+## Verificación
+
+```sh
+pnpm typecheck
+pnpm test
+```
 
 ## Rate limiting and proxies
 
@@ -91,8 +117,8 @@ OAuth supports Google and GitHub authorization-code flow with PKCE. Enable it
 only after configuring a client ID, secret and registered callback URI for the
 provider. `state` is stored only as a hash; the code verifier remains server
 side, expires in ten minutes and can be consumed once. Google must assert a
-verified email; GitHub uses its primary verified-email endpoint when the profile
-does not contain one. OAuth users are automatically marked as email verified.
+verified email; GitHub verifies the profile email against its verified-email
+endpoint. OAuth users are automatically marked as email verified.
 The first verified sign-in links the provider subject to a local user in
 `oauth_accounts`; subsequent sign-ins use that stable link rather than email.
 If a provider subject and a local email resolve to different users, the callback
@@ -104,3 +130,9 @@ its API contract. They do not add, change, or assume any dashboard screens.
 The included migrations create users, refreshable browser sessions, one-time
 authentication tokens and OAuth states. Add your own domain tables and
 migrations rather than storing application data in a cookie or process memory.
+
+## Límites deliberados
+
+No incluye organizaciones, RBAC ni Stripe Billing. Añade las entidades de
+producto mediante migraciones propias, sin almacenar datos de dominio en cookies
+ni en memoria de proceso.

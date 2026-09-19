@@ -4,7 +4,19 @@ Frontend reutilizable para un SaaS dinámico, construido con React Router en Fra
 
 El access token sólo vive en memoria de la pestaña. El refresh token permanece en una cookie `HttpOnly`; la cookie CSRF no secreta se lee en el navegador para enviar `X-CSRF-Token` en las operaciones que cambian estado. Nunca se usa `localStorage` para tokens.
 
-## Primer arranque
+## Capacidades y compatibilidad
+
+Implementa las capacidades de `template.manifest.json`: SSR, sesión de navegador,
+CSRF, recuperación, verificación, OAuth Google/GitHub, analítica con
+consentimiento, SEO y Stripe Billing. Requiere organizaciones y `billing.stripe`,
+por lo que es compatible con FastAPI y NestJS.
+
+## Requisitos
+
+- Node.js 20.19 o posterior y pnpm 11.
+- Un backend FastAPI o NestJS accesible desde `API_PROXY_TARGET`.
+
+## Desarrollo local
 
 1. Copia el entorno de ejemplo y selecciona el backend:
 
@@ -20,7 +32,19 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:5173](http://localhost:5173). La ruta de servidor integrada reenvía `/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` a `API_PROXY_TARGET`, preservando las cookies en el mismo origen de navegador. En producción configura el mismo comportamiento en el reverse proxy y usa HTTPS con `COOKIE_SECURE=true`. Define `VITE_PUBLIC_SITE_URL` con el dominio canónico de producción para que las etiquetas SEO, `robots.txt` y `sitemap.xml` contengan URLs absolutas correctas.
+## Configuración
+
+`API_PROXY_TARGET` es obligatoria. La ruta de servidor integrada reenvía
+`/auth/*`, `/users/*`, `/organizations/*` y `/billing/*` a ese origen y preserva
+las cookies del navegador. En producción configura el mismo proxy con HTTPS y
+define `VITE_PUBLIC_SITE_URL` con el dominio canónico.
+
+## Verificación
+
+```bash
+pnpm typecheck
+pnpm build
+```
 
 ## SEO
 
@@ -51,3 +75,9 @@ El dashboard es deliberadamente neutral: añade las entidades, vistas y navegaci
 ```bash
 node scripts/validate-template-manifests.mjs
 ```
+
+## Límites deliberados
+
+El dashboard no incluye entidades ni flujos específicos del producto. Mantén el
+contrato de autenticación y actualiza `template.manifest.json` al añadir nuevas
+capacidades.

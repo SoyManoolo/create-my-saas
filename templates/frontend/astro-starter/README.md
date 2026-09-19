@@ -2,7 +2,19 @@
 
 Plantilla Astro para la parte pública y el área protegida ligera de un SaaS: landing, pricing, documentación, blog, metadatos SEO, `robots.txt`, sitemap y autenticación real de navegador.
 
-## Arranque
+## Capacidades y compatibilidad
+
+Implementa las capacidades declaradas en `template.manifest.json`: contenido
+público, SEO, analítica con consentimiento y autenticación de navegador con
+OAuth. Es compatible con Fastify, FastAPI y NestJS para el área ligera. La
+feature `billing` añade organizaciones y Stripe, y requiere FastAPI o NestJS.
+
+## Requisitos
+
+- Node.js 20.9 o posterior y pnpm 11.
+- `PUBLIC_SITE_URL` y un backend compatible con el contrato de autenticación.
+
+## Desarrollo local
 
 ```bash
 cp .env.example .env
@@ -10,7 +22,12 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abre [http://localhost:4321](http://localhost:4321). Configura `PUBLIC_SITE_URL` con el dominio canónico antes del despliegue: se usa para los enlaces canónicos, `robots.txt` y el sitemap. El generador rellena `API_PROXY_TARGET` para que Astro reenvíe `/auth` y `/users` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una ruta del mismo origen que reenvíe esos prefijos; esto conserva el alcance de las cookies `HttpOnly` y CSRF.
+## Configuración
+
+`PUBLIC_SITE_URL` es obligatoria y define las URLs canónicas, `robots.txt` y el
+sitemap. El generador rellena `API_PROXY_TARGET` para reenviar `/auth` y
+`/users` durante desarrollo. En producción, `PUBLIC_API_BASE_URL` debe ser una
+ruta del mismo origen que conserve el alcance de las cookies `HttpOnly` y CSRF.
 
 ## Qué incluye
 
