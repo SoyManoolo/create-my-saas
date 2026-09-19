@@ -212,6 +212,16 @@ async function waitForApi(page, path, action) {
   return responsePromise;
 }
 
+async function waitForApiJson(page, path, action) {
+  // Astro navigates as soon as login succeeds. Start reading the body when
+  // Chromium observes the response, before that navigation can discard it.
+  const resultPromise = page.waitForResponse((response) => isApiResponse(response, path)).then(async (response) => ({
+    status: response.status(), body: await response.json(),
+  }));
+  await action();
+  return resultPromise;
+}
+
 let generatedRoot;
 let generatedProject;
 let api;
@@ -339,9 +349,9 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
     await expect(loginStatus).not.toContainText('incorrect');
 
     await page.locator('input[name="password"]').fill(credentials.password);
-    const login = await waitForApi(page, '/auth/login', () => page.getByRole('button', { name: /Iniciar sesión|Entrar/i }).click());
-    expect(login.status()).toBe(200);
-    ownerSession = await login.json();
+    const login = await waitForApiJson(page, '/auth/login', () => page.getByRole('button', { name: /Iniciar sesión|Entrar/i }).click());
+    expect(login.status).toBe(200);
+    ownerSession = login.body;
     await expectPath(page, paths.protected);
     await expect(page.getByRole('heading', { name: /Tu base de producto/i })).toBeVisible();
 
