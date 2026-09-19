@@ -146,6 +146,7 @@ describe("referential-integrity migration", () => {
       expect.stringContaining(
         'CONSTRAINT "FK_oauth_accounts_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE',
       ),
+      'CREATE INDEX "IDX_oauth_accounts_user" ON "oauth_accounts" ("user_id")',
       'DROP TABLE "oauth_accounts"',
     ]);
   });
