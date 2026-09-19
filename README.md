@@ -153,6 +153,7 @@ ejecuta las comprobaciones locales y crea el tag correspondiente.
 ## Documentación adicional
 
 - [Contrato de los manifiestos](./docs/template-manifests.md)
+- [Límite de producto y extensiones Community/Pro](./docs/community-pro-boundary.md)
 - [Publicar una release de la CLI](./docs/releasing.md)
 - [Despliegue reproducible](./docs/deployment.md)
 - [Contrato operativo común de FastAPI, NestJS y Fastify](./templates/backend/backend-infrastructure-contract.md)
