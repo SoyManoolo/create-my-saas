@@ -23,7 +23,12 @@ export class RateLimitGuard implements CanActivate {
     const windowSeconds = authBucket
       ? this.config.get<number>('AUTH_RATE_LIMIT_WINDOW_SECONDS', 60)
       : this.config.get<number>('RATE_LIMIT_WINDOW_SECONDS', 60);
-    if (!(await this.rateLimit.consume(key, limit, windowSeconds))) {
+    const result = await this.rateLimit.consume(key, limit, windowSeconds);
+    if (result === 'unavailable') {
+      context.switchToHttp().getResponse<Response>().setHeader('Retry-After', '60');
+      throw new AppError('RATE_LIMIT_UNAVAILABLE', 'Request limiting is temporarily unavailable.', 503);
+    }
+    if (result === 'limited') {
       context.switchToHttp().getResponse<Response>().setHeader('Retry-After', String(windowSeconds));
       throw new AppError('RATE_LIMITED', 'Too many requests. Please try again later.', 429);
     }

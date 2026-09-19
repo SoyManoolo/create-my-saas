@@ -39,6 +39,7 @@ export async function createApp({
     trustProxy: config.TRUST_PROXY_HEADERS ? config.trustedProxyIps : false,
   });
   const rateLimiter = new RateLimiter(config);
+  app.addHook('onClose', async () => rateLimiter.close());
   const auth = new AuthService(config, repository, emailSender);
 
   await app.register(cookie);

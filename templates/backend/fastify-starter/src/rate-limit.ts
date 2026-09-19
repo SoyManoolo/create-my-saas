@@ -1,113 +1,77 @@
-import { createConnection } from 'node:net';
-import { connect as connectTls } from 'node:tls';
+import { createClient, type RedisClientType } from 'redis';
 import type { Config } from './config.js';
 
 type Bucket = number[];
 type RateLimitPolicy = { limit: number; windowSeconds: number };
 export type RateLimitResult = 'allowed' | 'limited' | 'unavailable';
+const incrementScript = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; return count";
+const within = <T>(operation: Promise<T>, timeoutMs: number): Promise<T> => Promise.race([operation, new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error('Redis timeout')), timeoutMs))]);
 
-/** Redis counters are shared by every API process; memory is only a local fallback. */
+/** A shared node-redis connection backs all instances; memory is development/test fallback only. */
 export class RateLimiter {
   private readonly buckets = new Map<string, Bucket>();
-
+  private client?: RedisClientType;
+  private connecting?: Promise<RedisClientType | undefined>;
+  private retryAfter = 0;
   constructor(private readonly config: Config) {}
 
   async consume(key: string, policy?: RateLimitPolicy): Promise<RateLimitResult> {
     if (!this.config.RATE_LIMIT_ENABLED) return 'allowed';
     const limit = policy?.limit ?? this.config.RATE_LIMIT_REQUESTS;
-    const windowSeconds = policy?.windowSeconds ?? this.config.RATE_LIMIT_WINDOW_SECONDS;
-    const redis = await this.consumeRedis(key, limit, windowSeconds);
-    if (redis !== null) return redis ? 'allowed' : 'limited';
+    const seconds = policy?.windowSeconds ?? this.config.RATE_LIMIT_WINDOW_SECONDS;
+    const redis = await this.consumeRedis(key, limit, seconds);
+    if (redis !== undefined) return redis ? 'allowed' : 'limited';
     if (this.config.environment === 'production' || this.config.environment === 'staging') return 'unavailable';
-
-    const now = Date.now();
-    const cutoff = now - windowSeconds * 1_000;
-    const bucket = this.buckets.get(key) ?? [];
-    while (bucket[0] !== undefined && bucket[0] <= cutoff) bucket.shift();
-    if (bucket.length >= limit) return 'limited';
-    bucket.push(now);
-    this.buckets.set(key, bucket);
-    return 'allowed';
+    return this.consumeMemory(key, limit, seconds);
   }
 
   async isRedisAvailable(timeoutMs = 500): Promise<boolean> {
-    if (!this.config.REDIS_URL) return false;
-    try {
-      const target = new URL(this.config.REDIS_URL);
-      if (!['redis:', 'rediss:'].includes(target.protocol)) return false;
-      const command = (parts: string[]) => `*${parts.length}\r\n${parts.map((part) => `$${Buffer.byteLength(part)}\r\n${part}\r\n`).join('')}`;
-      return await new Promise<boolean>((resolve) => {
-        const socket = target.protocol === 'rediss:'
-          ? connectTls({ host: target.hostname, port: Number(target.port || 6380), servername: target.hostname })
-          : createConnection({ host: target.hostname, port: Number(target.port || 6379) });
-        let settled = false;
-        const finish = (available: boolean) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          socket.removeAllListeners();
-          socket.destroy();
-          resolve(available);
-        };
-        const timer = setTimeout(() => finish(false), timeoutMs);
-        socket.once('error', () => finish(false));
-        socket.once(target.protocol === 'rediss:' ? 'secureConnect' : 'connect', () => {
-          let received = '';
-          socket.on('data', (chunk: Buffer) => {
-            received += chunk.toString();
-            if (received.split('\r\n').some((line) => line.startsWith('-'))) return finish(false);
-            if (received.includes('+PONG\r\n')) finish(true);
-          });
-          const password = decodeURIComponent(target.password);
-          const username = decodeURIComponent(target.username);
-          const ping = command(['PING']);
-          socket.write(password ? `${command(username ? ['AUTH', username, password] : ['AUTH', password])}${ping}` : ping);
-        });
-      });
-    } catch {
-      return false;
-    }
+    const client = await this.redis(timeoutMs);
+    if (!client) return false;
+    try { return (await within(client.ping(), timeoutMs)) === 'PONG'; }
+    catch { this.markUnavailable(); return false; }
   }
 
-  private async consumeRedis(key: string, limit: number, windowSeconds: number): Promise<boolean | null> {
-    if (!this.config.REDIS_URL) return null;
-    try {
-      const target = new URL(this.config.REDIS_URL);
-      if (!['redis:', 'rediss:'].includes(target.protocol)) return null;
-      const window = Math.floor(Date.now() / (windowSeconds * 1_000));
-      const redisKey = `${this.config.RATE_LIMIT_PREFIX}:${key}:${window}`;
-      const command = (parts: string[]) => `*${parts.length}\r\n${parts.map((part) => `$${Buffer.byteLength(part)}\r\n${part}\r\n`).join('')}`;
-      const script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; return count";
-      const increment = command(['EVAL', script, '1', redisKey, String(windowSeconds)]);
-      const reply = await new Promise<string>((resolve, reject) => {
-        const socket = target.protocol === 'rediss:'
-          ? connectTls({ host: target.hostname, port: Number(target.port || 6380), servername: target.hostname })
-          : createConnection({ host: target.hostname, port: Number(target.port || 6379) });
-        let received = '';
-        const finish = (result: string | Error) => {
-          clearTimeout(timer);
-          socket.removeAllListeners();
-          socket.destroy();
-          if (result instanceof Error) reject(result);
-          else resolve(result);
-        };
-        const timer = setTimeout(() => finish(new Error('Redis timeout')), 300);
-        socket.once('error', (error) => finish(error));
-        socket.once('connect', () => {
-          const password = decodeURIComponent(target.password);
-          const username = decodeURIComponent(target.username);
-          socket.on('data', (chunk: Buffer) => {
-            received += chunk.toString();
-            if (received.startsWith('-')) return finish(new Error('Redis command failed'));
-            const match = received.match(/(?:^|\r\n):(\d+)\r\n/);
-            if (match) finish(match[1]);
-          });
-          socket.write(password ? `${command(username ? ['AUTH', username, password] : ['AUTH', password])}${increment}` : increment);
-        });
-      });
-      return Number(reply) <= limit;
-    } catch {
-      return null;
-    }
+  async close(): Promise<void> {
+    const client = this.client;
+    this.client = undefined;
+    this.connecting = undefined;
+    if (client?.isOpen) await client.close();
   }
+
+  private consumeMemory(key: string, limit: number, seconds: number): RateLimitResult {
+    const now = Date.now(); const cutoff = now - seconds * 1_000;
+    const bucket = this.buckets.get(key) ?? [];
+    while (bucket[0] !== undefined && bucket[0] <= cutoff) bucket.shift();
+    if (bucket.length >= limit) return 'limited';
+    bucket.push(now); this.buckets.set(key, bucket); return 'allowed';
+  }
+
+  private async consumeRedis(key: string, limit: number, seconds: number): Promise<boolean | undefined> {
+    const client = await this.redis(300);
+    if (!client) return undefined;
+    try {
+      const window = Math.floor(Date.now() / (seconds * 1_000));
+      const count = await within(client.eval(incrementScript, { keys: [`${this.config.RATE_LIMIT_PREFIX}:${key}:${window}`], arguments: [String(seconds)] }) as Promise<number>, 300);
+      return Number(count) <= limit;
+    } catch { this.markUnavailable(); return undefined; }
+  }
+
+  private async redis(timeoutMs: number): Promise<RedisClientType | undefined> {
+    const url = this.config.REDIS_URL;
+    if (!url || Date.now() < this.retryAfter) return undefined;
+    try { if (!['redis:', 'rediss:'].includes(new URL(url).protocol)) return undefined; } catch { return undefined; }
+    if (this.client?.isReady) return this.client;
+    if (!this.client) {
+      this.client = createClient({ url, disableOfflineQueue: true, commandsQueueMaxLength: 1, socket: { connectTimeout: timeoutMs, reconnectStrategy: (retries) => Math.min(50 * 2 ** retries, 1_000) } });
+      this.client.on('error', () => undefined);
+    }
+    if (!this.connecting) {
+      const client = this.client;
+      this.connecting = (client.isOpen ? Promise.resolve() : client.connect()).then(() => client).catch(() => { this.markUnavailable(); return undefined; }).finally(() => { this.connecting = undefined; });
+    }
+    return within(this.connecting, timeoutMs).catch(() => { this.markUnavailable(); return undefined; });
+  }
+
+  private markUnavailable(): void { this.retryAfter = Date.now() + 250; }
 }
