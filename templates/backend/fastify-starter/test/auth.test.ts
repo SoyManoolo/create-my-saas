@@ -306,6 +306,10 @@ test('browser session contract returns an in-memory access token but never a ref
     assert.match(cookies, /refresh_token=.*Path=\/auth; HttpOnly/);
     assert.match(cookies, /csrf_token=(?!;).*Path=\//);
 
+    const invalidCredentials = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'person@example.com', password: 'not-the-right-password' } });
+    assert.equal(invalidCredentials.statusCode, 401);
+    assert.deepEqual(invalidCredentials.json(), { error: { code: 'INVALID_CREDENTIALS', message: 'The email or password is incorrect.' } });
+
     const refresh = cookie(login, 'refresh_token');
     const csrf = cookie(login, 'csrf_token');
     const me = await app.inject({ method: 'GET', url: '/users/me', headers: { authorization: `Bearer ${login.json().accessToken}` } });

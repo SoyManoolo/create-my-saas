@@ -8,7 +8,13 @@ export const registerBody = z.object({
   }),
 });
 
-export const loginBody = registerBody.pick({ email: true, password: true });
+// Password-complexity rules apply when a password is created or changed, not
+// when checking existing credentials. Otherwise an incorrect password can
+// reveal validation details and return 400 instead of the uniform 401.
+export const loginBody = z.object({
+  email: z.string().email().max(320),
+  password: z.string().min(1).max(256),
+});
 export const resetRequestBody = z.object({ email: z.string().email().max(320) });
 export const resetConfirmBody = z.object({
   token: z.string().min(20).max(512),
