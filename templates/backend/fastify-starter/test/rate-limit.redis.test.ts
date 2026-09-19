@@ -18,11 +18,13 @@ integration('Redis rate limits are shared by instances and reconnect after a con
   const first = new RateLimiter(config(prefix));
   const second = new RateLimiter(config(prefix));
   try {
-    assert.equal(await first.consume('shared-key', { limit: 2, windowSeconds: 5 }), 'allowed');
-    assert.equal(await second.consume('shared-key', { limit: 2, windowSeconds: 5 }), 'allowed');
-    assert.equal(await first.consume('shared-key', { limit: 2, windowSeconds: 5 }), 'limited');
+    assert.equal(await first.isRedisAvailable(2_000), true, 'Redis must be ready before checking a distributed counter');
+    assert.equal(await second.isRedisAvailable(2_000), true, 'each instance must have a usable Redis connection');
+    assert.equal(await first.consume('shared-key', { limit: 2, windowSeconds: 3_600 }), 'allowed');
+    assert.equal(await second.consume('shared-key', { limit: 2, windowSeconds: 3_600 }), 'allowed');
+    assert.equal(await first.consume('shared-key', { limit: 2, windowSeconds: 3_600 }), 'limited');
     await first.close();
-    assert.equal(await first.consume('reconnected-key', { limit: 1, windowSeconds: 5 }), 'allowed');
+    assert.equal(await first.consume('reconnected-key', { limit: 1, windowSeconds: 3_600 }), 'allowed');
     assert.equal(await first.isRedisAvailable(), true);
   } finally {
     await Promise.all([first.close(), second.close()]);

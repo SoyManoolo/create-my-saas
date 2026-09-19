@@ -17,11 +17,13 @@ integration('Redis rate limits are shared by instances and reconnect after a con
     const first = service(prefix);
     const second = service(prefix);
     try {
-      await expect(first.consume('shared-key', 2, 5)).resolves.toBe('allowed');
-      await expect(second.consume('shared-key', 2, 5)).resolves.toBe('allowed');
-      await expect(first.consume('shared-key', 2, 5)).resolves.toBe('limited');
+      await expect(first.isRedisAvailable(2_000)).resolves.toBe(true);
+      await expect(second.isRedisAvailable(2_000)).resolves.toBe(true);
+      await expect(first.consume('shared-key', 2, 3_600)).resolves.toBe('allowed');
+      await expect(second.consume('shared-key', 2, 3_600)).resolves.toBe('allowed');
+      await expect(first.consume('shared-key', 2, 3_600)).resolves.toBe('limited');
       await first.onModuleDestroy();
-      await expect(first.consume('reconnected-key', 1, 5)).resolves.toBe('allowed');
+      await expect(first.consume('reconnected-key', 1, 3_600)).resolves.toBe('allowed');
       await expect(first.isRedisAvailable()).resolves.toBe(true);
     } finally {
       await Promise.all([first.onModuleDestroy(), second.onModuleDestroy()]);
