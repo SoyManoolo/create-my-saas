@@ -224,7 +224,7 @@ test.beforeAll(async () => {
   await run('pnpm', ['install', '--frozen-lockfile'], { cwd: frontendDirectory });
   await run('pnpm', ['run', 'build'], { cwd: frontendDirectory });
   web = frontend === 'astro'
-    ? start('pnpm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '3100'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: '3100' } })
+    ? start('pnpm', ['exec', 'astro', 'dev', '--host', '127.0.0.1', '--port', '3100'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: '3100' } })
     : start('pnpm', ['run', 'start'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: '3100' } });
   await waitFor(`${frontendOrigin}/`, web);
 });

@@ -224,7 +224,7 @@ try {
   await run('pnpm', ['install', '--frozen-lockfile'], { cwd: frontendDirectory });
   await run('pnpm', ['run', 'build'], { cwd: frontendDirectory });
   web = frontend === 'astro'
-    ? start('pnpm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(frontendPort)], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: String(frontendPort) } })
+    ? start('pnpm', ['exec', 'astro', 'dev', '--host', '127.0.0.1', '--port', String(frontendPort)], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: String(frontendPort) } })
     : start('pnpm', ['run', 'start'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: String(frontendPort) } });
   await waitFor(`${frontendOrigin}/`, web);
   await verifyExternalProvidersAreIsolated();
