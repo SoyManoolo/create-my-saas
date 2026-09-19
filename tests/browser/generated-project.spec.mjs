@@ -154,16 +154,20 @@ function billingPath(organizationId, action) {
 }
 
 async function browserApi(page, path, { method = 'GET', body, accessToken } = {}) {
-  return page.evaluate(async ({ requestPath, requestMethod, requestBody, token }) => {
+  const requestPath = apiPath(path);
+  // Astro is a static site: its generated client uses PUBLIC_API_BASE_URL,
+  // rather than a same-origin server proxy. Exercise that identical path.
+  const requestUrl = frontend === 'astro' ? `${apiOrigin}${requestPath}` : requestPath;
+  return page.evaluate(async ({ requestUrl: url, requestMethod, requestBody, token }) => {
     const csrf = document.cookie.split(';').map((value) => value.trim().split('=', 2)).find(([name]) => name === 'csrf_token')?.[1];
     const headers = new Headers();
     if (requestBody !== undefined) headers.set('content-type', 'application/json');
     if (token) headers.set('authorization', `Bearer ${token}`);
     if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(requestMethod)) headers.set('x-csrf-token', csrf);
-    const response = await fetch(requestPath, { method: requestMethod, headers, credentials: 'include', body: requestBody === undefined ? undefined : JSON.stringify(requestBody) });
+    const response = await fetch(url, { method: requestMethod, headers, credentials: 'include', body: requestBody === undefined ? undefined : JSON.stringify(requestBody) });
     const responseBody = await response.json().catch(() => undefined);
     return { status: response.status, body: responseBody };
-  }, { requestPath: apiPath(path), requestMethod: method, requestBody: body, token: accessToken });
+  }, { requestUrl, requestMethod: method, requestBody: body, token: accessToken });
 }
 
 function startMailbox() {
