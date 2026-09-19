@@ -53,7 +53,10 @@ const e2eEnvironment = {
 };
 const frontendEnvironment = frontend === 'nextjs'
   ? { ...e2eEnvironment, NODE_ENV: 'production' }
+  : frontend === 'astro'
+    ? { ...e2eEnvironment, PUBLIC_API_BASE_URL: apiOrigin }
   : e2eEnvironment;
+const frontendApiOrigin = frontend === 'astro' ? apiOrigin : frontendOrigin;
 
 function run(command, args, { cwd, env = e2eEnvironment } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -138,7 +141,7 @@ function cookieHeader(jar) {
 }
 
 async function request(path, init = {}) {
-  return fetch(`${frontendOrigin}${path}`, {
+  return fetch(`${frontendApiOrigin}${path}`, {
     redirect: 'manual',
     ...init,
     headers: { 'X-Request-ID': 'generated-project-e2e', ...init.headers },
@@ -205,14 +208,10 @@ async function verifyBrowserSessionThroughProxy() {
 }
 
 async function verifyExternalProvidersAreIsolated() {
-  const oauth = frontend === 'astro'
-    ? await request('/auth/oauth/google/start')
-    : backend === 'nestjs'
+  const oauth = backend === 'nestjs'
     ? await request('/auth/oauth/providers')
     : await request('/auth/oauth/google/start');
-  if (frontend === 'astro') {
-    await expectStatus(oauth, 404, 'the lightweight Astro starter must not start an external OAuth flow');
-  } else if (backend === 'nestjs') {
+  if (backend === 'nestjs') {
     await expectStatus(oauth, 200, 'OAuth provider configuration failed');
     assert.ok((await oauth.json()).every((provider) => provider.configured === false), 'the controlled OAuth providers must remain disabled.');
   } else {
@@ -222,9 +221,9 @@ async function verifyExternalProvidersAreIsolated() {
   const stripe = await request('/billing/webhooks/stripe', { method: 'POST' });
   await expectStatus(
     stripe,
-    frontend === 'astro' ? 404 : 503,
-    frontend === 'astro'
-      ? 'the lightweight Astro starter must not expose billing routes'
+    backend === 'fastify' ? 404 : 503,
+    backend === 'fastify'
+      ? 'the lightweight Fastify starter must not expose billing routes'
       : 'the controlled Stripe provider must fail closed instead of calling a real service',
   );
 }

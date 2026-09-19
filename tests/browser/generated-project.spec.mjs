@@ -64,7 +64,7 @@ const e2eEnvironment = Object.fromEntries(Object.entries({
 }).filter(([, value]) => value !== ''));
 const frontendEnvironment = frontend === 'nextjs'
   ? { ...e2eEnvironment, NODE_ENV: 'production' }
-  : frontend === 'astro' && backend === 'fastify'
+  : frontend === 'astro'
     ? { ...e2eEnvironment, PUBLIC_API_BASE_URL: apiOrigin }
   : e2eEnvironment;
 
