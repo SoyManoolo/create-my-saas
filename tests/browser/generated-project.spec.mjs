@@ -282,7 +282,7 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
     await test.step('unconfigured OAuth is reported in the DOM', async () => {
       const providers = await waitForApi(page, '/auth/oauth/providers', () => page.getByRole('button', { name: 'Google' }).click());
       expect(providers.status()).toBe(200);
-      const oauthStatus = frontend === 'astro' ? page.locator('[data-oauth-status]') : page.getByRole('alert');
+      const oauthStatus = frontend === 'astro' ? page.locator('[data-oauth-status]') : page.getByText(/OAuth no está configurado/i);
       await expect(oauthStatus).toContainText(/OAuth no está configurado/i);
       await expectPath(page, paths.login);
     });

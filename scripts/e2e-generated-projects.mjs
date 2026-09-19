@@ -28,7 +28,7 @@ const apiPort = { fastapi: 8000, nestjs: 3001, fastify: 3002 }[backend];
 const frontendPort = 3100;
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
-const e2eEnvironment = {
+const e2eEnvironment = Object.fromEntries(Object.entries({
   ...process.env,
   APP_ENV: 'development',
   NODE_ENV: 'development',
@@ -57,7 +57,7 @@ const e2eEnvironment = {
   EMAIL_DELIVERY_URL: '',
   EMAIL_DELIVERY_TOKEN: '',
   API_PROXY_TARGET: apiOrigin,
-};
+}).filter(([, value]) => value !== ''));
 const frontendEnvironment = frontend === 'nextjs'
   ? { ...e2eEnvironment, NODE_ENV: 'production' }
   : frontend === 'astro'
