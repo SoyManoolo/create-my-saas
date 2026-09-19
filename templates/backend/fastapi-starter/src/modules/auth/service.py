@@ -75,7 +75,7 @@ class AuthService:
             return await self._complete_oauth_session(user)
 
         user = email_user or await self._create_oauth_user(profile)
-        await self._link_oauth_account(provider, profile.provider_account_id, user)
+        user = await self._link_oauth_account(provider, profile.provider_account_id, user)
         return await self._complete_oauth_session(user)
 
     async def _get_oauth_account(
@@ -115,10 +115,11 @@ class AuthService:
         provider: str,
         provider_account_id: str,
         user: User,
-    ) -> None:
+    ) -> User:
+        user_id = user.id
         self.db.add(
             OAuthAccount(
-                user_id=user.id,
+                user_id=user_id,
                 provider=provider,
                 provider_account_id=provider_account_id,
             )
@@ -128,8 +129,13 @@ class AuthService:
         except IntegrityError:
             await self.db.rollback()
             account = await self._get_oauth_account(provider, provider_account_id)
-            if not account or account.user_id != user.id:
+            if not account or account.user_id != user_id:
                 self._raise_oauth_account_conflict()
+            linked_user = await self.users.get_user_by_id(account.user_id)
+            if not linked_user:
+                self._raise_oauth_account_conflict()
+            return linked_user
+        return user
 
     @staticmethod
     def _raise_oauth_account_conflict() -> None:
