@@ -152,7 +152,7 @@ async function expectStatus(response, expected, description) {
 }
 
 async function verifyBrowserSessionThroughProxy() {
-  const credentials = { name: 'Generated Project', email: 'e2e@example.test', password: 'correct-horse-battery-staple' };
+  const credentials = { name: 'Generated Project', email: 'e2e@example.com', password: 'correct-horse-battery-staple1' };
   const register = await request('/auth/register', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials),
   });

@@ -283,7 +283,7 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
   }
 
   const unique = `${backend}-${frontend}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const credentials = { name: 'Browser E2E', email: `${unique}@example.test`, password: 'browser-password-123' };
+  const credentials = { name: 'Browser E2E', email: `${unique}@example.com`, password: 'browser-password-123' };
   let ownerSession;
   let organization;
 
@@ -371,7 +371,7 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
       const inviteeContext = await browser.newContext({ baseURL: frontendOrigin });
       const inviteePage = await inviteeContext.newPage();
       await inviteePage.goto(paths.login);
-      const invitee = { name: 'Invited browser user', email: `invitee-${unique}@example.test`, password: 'invitee-password-123' };
+      const invitee = { name: 'Invited browser user', email: `invitee-${unique}@example.com`, password: 'invitee-password-123' };
       const registeredInvitee = await browserApi(inviteePage, '/auth/register', { method: 'POST', body: invitee });
       expect(registeredInvitee.status).toBe(201);
       const inviteeLogin = await browserApi(inviteePage, '/auth/login', {
