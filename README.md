@@ -11,9 +11,9 @@ compatibles, configura su conexión local y deja registrada la selección hecha.
 
 ## Estado actual
 
-La CLI y el catálogo de plantillas funcionan desde este repositorio. El paquete
-todavía **no está publicado en npm**, por lo que el comando `npx` mostrado más
-abajo describe el uso previsto tras la publicación.
+La CLI y el catálogo de plantillas funcionan desde este repositorio. La primera
+versión, [`saas-starter@0.1.0`](https://www.npmjs.com/package/saas-starter),
+ya está publicada en npm.
 
 Actualmente hay seis plantillas:
 
@@ -67,7 +67,13 @@ variables y los callbacks registrados.
 
 ## Uso
 
-Mientras el paquete no esté publicado, ejecútalo desde este checkout:
+Instala y ejecuta la versión publicada con `npx`:
+
+```sh
+npx saas-starter@latest my-saas --backend nestjs --frontend nextjs
+```
+
+Para desarrollar la CLI desde este checkout:
 
 ```sh
 node packages/cli/bin/create-my-saas.js my-saas --backend nestjs --frontend nextjs
@@ -85,12 +91,6 @@ Para ver el catálogo disponible:
 
 ```sh
 node packages/cli/bin/create-my-saas.js --list
-```
-
-Tras publicar el paquete, el mismo flujo será:
-
-```sh
-npx saas-starter@latest my-saas --backend nestjs --frontend nextjs
 ```
 
 La CLI no sobrescribe directorios existentes. Cada proyecto generado incluye
@@ -146,10 +146,9 @@ expone rutas de organizaciones ni facturación; Fastify + Astro cubre sólo los
 flujos que declara ese backend.
 
 La distribución de npm incluye la CLI, las plantillas y la documentación, y
-excluye dependencias y compilados. Los tags `vX.Y.Z` publican la misma versión
-en npm y crean su GitHub Release; `v0.1.0`, que arranca el paquete y la relación
-de confianza, comprueba la publicación manual y crea solo la Release. Consulta
-la [guía de releases](./docs/releasing.md).
+excluye dependencias y compilados. Las publicaciones se realizan manualmente;
+antes de publicar una nueva versión, actualiza `version` en `package.json`,
+ejecuta las comprobaciones locales y crea el tag correspondiente.
 
 ## Documentación adicional
 
