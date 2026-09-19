@@ -205,10 +205,14 @@ async function verifyBrowserSessionThroughProxy() {
 }
 
 async function verifyExternalProvidersAreIsolated() {
-  const oauth = backend === 'nestjs'
+  const oauth = frontend === 'astro'
+    ? await request('/auth/oauth/google/start')
+    : backend === 'nestjs'
     ? await request('/auth/oauth/providers')
     : await request('/auth/oauth/google/start');
-  if (backend === 'nestjs') {
+  if (frontend === 'astro') {
+    await expectStatus(oauth, 404, 'the lightweight Astro starter must not start an external OAuth flow');
+  } else if (backend === 'nestjs') {
     await expectStatus(oauth, 200, 'OAuth provider configuration failed');
     assert.ok((await oauth.json()).every((provider) => provider.configured === false), 'the controlled OAuth providers must remain disabled.');
   } else {
