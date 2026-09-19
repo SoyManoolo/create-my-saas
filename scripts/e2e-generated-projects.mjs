@@ -67,7 +67,7 @@ function run(command, args, { cwd, env = e2eEnvironment } = {}) {
 }
 
 function start(command, args, { cwd, env = e2eEnvironment } = {}) {
-  const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, args, { cwd, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   child.stdout.on('data', (chunk) => { output = `${output}${chunk}`.slice(-8_000); });
   child.stderr.on('data', (chunk) => { output = `${output}${chunk}`.slice(-8_000); });
@@ -91,15 +91,34 @@ async function waitFor(url, processInfo) {
 }
 
 async function stop(processInfo) {
-  if (!processInfo || processInfo.child.exitCode !== null) return;
-  processInfo.child.kill('SIGTERM');
+  if (!processInfo) return;
+  const terminate = (signal) => {
+    if (process.platform !== 'win32' && processInfo.child.pid) {
+      try { process.kill(-processInfo.child.pid, signal); return; } catch { /* Process group already exited. */ }
+    }
+    if (processInfo.child.exitCode === null) processInfo.child.kill(signal);
+  };
+  terminate('SIGTERM');
+  if (processInfo.child.exitCode !== null) return;
   await new Promise((resolveStop) => {
     const timer = setTimeout(() => {
-      if (processInfo.child.exitCode === null) processInfo.child.kill('SIGKILL');
+      terminate('SIGKILL');
       resolveStop();
     }, 5_000);
     processInfo.child.once('exit', () => { clearTimeout(timer); resolveStop(); });
   });
+}
+
+async function removeTemporaryDirectory(directory) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (error?.code !== 'ENOTEMPTY' || attempt === 2) throw error;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    }
+  }
 }
 
 function setCookies(response, jar) {
@@ -236,5 +255,5 @@ try {
 } finally {
   await stop(web);
   await stop(api);
-  if (generatedRoot) await rm(generatedRoot, { recursive: true, force: true });
+  if (generatedRoot) await removeTemporaryDirectory(generatedRoot);
 }
