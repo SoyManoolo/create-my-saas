@@ -332,7 +332,7 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
     await page.locator('input[name="password"]').fill('not-the-right-password');
     const rejectedLogin = await waitForApi(page, '/auth/login', () => page.getByRole('button', { name: /Iniciar sesión|Entrar/i }).click());
     expect(rejectedLogin.status()).toBe(401);
-    const loginStatus = frontend === 'astro' ? page.locator('[data-form-status]') : page.getByRole('alert');
+    const loginStatus = frontend === 'astro' ? page.locator('[data-form-status]') : page.locator('form [role="alert"]');
     await expect(loginStatus).toHaveText('El correo o la contraseña no son correctos.');
     await expect(loginStatus).not.toContainText('incorrect');
 
