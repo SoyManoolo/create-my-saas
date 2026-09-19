@@ -62,6 +62,9 @@ const e2eEnvironment = Object.fromEntries(Object.entries({
   EMAIL_DELIVERY_TOKEN: 'generated-browser-e2e-email-token',
   API_PROXY_TARGET: apiOrigin,
 }).filter(([, value]) => value !== ''));
+const frontendEnvironment = frontend === 'nextjs'
+  ? { ...e2eEnvironment, NODE_ENV: 'production' }
+  : e2eEnvironment;
 
 function run(command, args, { cwd, env = e2eEnvironment } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -222,10 +225,10 @@ test.beforeAll(async () => {
   }
 
   await run('pnpm', ['install', '--frozen-lockfile'], { cwd: frontendDirectory });
-  await run('pnpm', ['run', 'build'], { cwd: frontendDirectory });
+  await run('pnpm', ['run', 'build'], { cwd: frontendDirectory, env: frontendEnvironment });
   web = frontend === 'astro'
-    ? start('pnpm', ['exec', 'astro', 'dev', '--host', '127.0.0.1', '--port', '3100'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: '3100' } })
-    : start('pnpm', ['run', 'start'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: '3100' } });
+    ? start('pnpm', ['exec', 'astro', 'dev', '--host', '127.0.0.1', '--port', '3100'], { cwd: frontendDirectory, env: { ...frontendEnvironment, PORT: '3100' } })
+    : start('pnpm', ['run', 'start'], { cwd: frontendDirectory, env: { ...frontendEnvironment, PORT: '3100' } });
   await waitFor(`${frontendOrigin}/`, web);
 });
 

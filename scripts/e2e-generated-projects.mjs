@@ -51,6 +51,9 @@ const e2eEnvironment = {
   EMAIL_DELIVERY_TOKEN: '',
   API_PROXY_TARGET: apiOrigin,
 };
+const frontendEnvironment = frontend === 'nextjs'
+  ? { ...e2eEnvironment, NODE_ENV: 'production' }
+  : e2eEnvironment;
 
 function run(command, args, { cwd, env = e2eEnvironment } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -222,10 +225,10 @@ try {
   }
 
   await run('pnpm', ['install', '--frozen-lockfile'], { cwd: frontendDirectory });
-  await run('pnpm', ['run', 'build'], { cwd: frontendDirectory });
+  await run('pnpm', ['run', 'build'], { cwd: frontendDirectory, env: frontendEnvironment });
   web = frontend === 'astro'
-    ? start('pnpm', ['exec', 'astro', 'dev', '--host', '127.0.0.1', '--port', String(frontendPort)], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: String(frontendPort) } })
-    : start('pnpm', ['run', 'start'], { cwd: frontendDirectory, env: { ...e2eEnvironment, PORT: String(frontendPort) } });
+    ? start('pnpm', ['exec', 'astro', 'dev', '--host', '127.0.0.1', '--port', String(frontendPort)], { cwd: frontendDirectory, env: { ...frontendEnvironment, PORT: String(frontendPort) } })
+    : start('pnpm', ['run', 'start'], { cwd: frontendDirectory, env: { ...frontendEnvironment, PORT: String(frontendPort) } });
   await waitFor(`${frontendOrigin}/`, web);
   await verifyExternalProvidersAreIsolated();
   await verifyBrowserSessionThroughProxy();
