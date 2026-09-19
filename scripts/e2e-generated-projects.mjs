@@ -189,7 +189,9 @@ async function verifyBrowserSessionThroughProxy() {
 
   const currentUser = await request('/users/me', { headers: { Authorization: `Bearer ${loginBody.accessToken}` } });
   await expectStatus(currentUser, 200, 'the proxy must forward Authorization headers');
-  assert.equal((await currentUser.json()).email, credentials.email);
+  const currentUserBody = await currentUser.json();
+  const publicUser = backend === 'fastify' ? currentUserBody.user : currentUserBody;
+  assert.equal(publicUser.email, credentials.email);
 
   const csrf = jar.get('csrf_token');
   const refresh = await request('/auth/refresh', {

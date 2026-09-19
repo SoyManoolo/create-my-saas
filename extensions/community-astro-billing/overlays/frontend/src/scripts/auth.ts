@@ -250,7 +250,8 @@ async function bindBilling(token: string) {
           billingRequest<BillingConfiguration>(select.value, "configuration", token),
           billingRequest<BillingSubscription>(select.value, "subscription", token),
         ]);
-        renderBilling(summary, plans, configuration, subscription, select.value, token); billingStatus("");
+        renderBilling(summary, plans, configuration, subscription, select.value, token);
+        if (configuration.configured) billingStatus("");
       } catch (cause) { billingStatus(cause instanceof Error ? cause.message : "No se ha podido cargar la facturación.", true); }
     };
     select.addEventListener("change", () => void load());
