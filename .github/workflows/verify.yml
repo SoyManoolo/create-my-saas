@@ -14,8 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Validate template manifests
-        run: node scripts/validate-template-manifests.mjs
+      - name: Validate Community manifests
+        run: npm run validate:templates
       - name: Run generator tests
         run: node --test packages/cli/test/*.test.js
 
@@ -73,6 +73,32 @@ jobs:
           grep -Fx "PUBLIC_SITE_URL=https://example.com" "$project/frontend/.env.example"
           test -f "$project/frontend/src/pages/index.astro"
           test -f "$project/backend/main.py"
+
+  generated-billing-extension:
+    name: Generated Astro Billing extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - name: Generate FastAPI and Astro with Community Billing
+        run: >-
+          node packages/cli/bin/create-my-saas.js
+          "$RUNNER_TEMP/astro-billing" --backend fastapi --frontend astro --feature billing
+      - name: Build the generated Billing frontend
+        run: |
+          project="$RUNNER_TEMP/astro-billing"
+          test -f "$project/frontend/src/pages/billing/index.astro"
+          grep -Fx 'PUBLIC_POSTHOG_KEY=' "$project/frontend/.env.example"
+          grep -F '"id": "community:astro-billing"' "$project/.create-my-saas.json"
+          cd "$project/frontend"
+          pnpm install --frozen-lockfile
+          pnpm run check
+          pnpm run build
 
   generated-project-e2e:
     name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} HTTP contract E2E

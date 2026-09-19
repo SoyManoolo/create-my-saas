@@ -1,4 +1,4 @@
-import { loadCatalog } from './catalog.js';
+import { defaultExtensionsDirectory, loadCatalog } from './catalog.js';
 import { generateProject } from './generator.js';
 
 const usage = `Usage: create-my-saas <destination> [options]
@@ -6,7 +6,8 @@ const usage = `Usage: create-my-saas <destination> [options]
 Options:
   --backend <id>     Backend template to generate
   --frontend <id>    Frontend template to generate
-  --feature <id>     Enable an optional frontend feature (repeatable)
+  --feature <id>     Enable a Community or supplied extension (repeatable)
+  --extensions-dir <path>  Discover additional local extensions (repeatable)
   --list             List available templates
   --help, -h         Show this help
 
@@ -23,15 +24,18 @@ function listTemplates(log, catalog = loadCatalog()) {
     for (const template of catalog[kind]) {
       const capabilities = template.capabilities.join(', ');
       log(`  ${template.key} (${template.version}) - ${capabilities}`);
-      for (const feature of template.features ?? []) {
-        log(`    optional feature: ${feature.id} - ${feature.description}`);
-      }
+    }
+  }
+  if (catalog.extensions.length > 0) {
+    log('\nextensions:');
+    for (const extension of catalog.extensions) {
+      log(`  ${extension.id} (${extension.version}) - ${extension.description}`);
     }
   }
 }
 
 export function parseArguments(argumentsList) {
-  const options = { backendId: undefined, frontendId: undefined, featureIds: [], destination: undefined, list: false, help: false };
+  const options = { backendId: undefined, frontendId: undefined, featureIds: [], extensionsDirectories: [], destination: undefined, list: false, help: false };
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -52,13 +56,18 @@ export function parseArguments(argumentsList) {
         throw new Error('Missing value for --feature.');
       }
       options.featureIds.push(featureId);
+    } else if (argument.startsWith('--extensions-dir=')) {
+      const directory = argument.slice('--extensions-dir='.length);
+      if (!directory) throw new Error('Missing value for --extensions-dir.');
+      options.extensionsDirectories.push(directory);
     } else
-    if (argument === '--backend' || argument === '--frontend' || argument === '--feature') {
+    if (argument === '--backend' || argument === '--frontend' || argument === '--feature' || argument === '--extensions-dir') {
       const value = argumentsList[index + 1];
       if (!value || value.startsWith('--')) {
         throw new Error(`Missing value for ${argument}.`);
       }
       if (argument === '--feature') options.featureIds.push(value);
+      else if (argument === '--extensions-dir') options.extensionsDirectories.push(value);
       else options[argument === '--backend' ? 'backendId' : 'frontendId'] = value;
       index += 1;
     } else if (argument === '--list') {
@@ -86,14 +95,15 @@ export function run(argumentsList, { log = console.log, error = console.error } 
       return 0;
     }
     if (options.list) {
-      listTemplates(log);
+      listTemplates(log, loadCatalog(undefined, [defaultExtensionsDirectory, ...options.extensionsDirectories]));
       return 0;
     }
     if (!options.destination) {
       throw new Error('A destination directory is required.');
     }
 
-    const result = generateProject(options);
+    const extensionsDirectories = [defaultExtensionsDirectory, ...options.extensionsDirectories];
+    const result = generateProject({ ...options, extensionsDirectories });
     log(`Created ${result.outputDirectory}`);
     return 0;
   } catch (caughtError) {

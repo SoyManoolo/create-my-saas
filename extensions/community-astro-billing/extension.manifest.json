@@ -1,0 +1,40 @@
+{
+  "$schema": "../../docs/extension-manifest.schema.json",
+  "schemaVersion": 1,
+  "id": "community:astro-billing",
+  "aliases": ["billing"],
+  "version": "1.0.0",
+  "displayName": "Astro billing",
+  "description": "Organization-scoped Stripe Checkout and Customer Portal for Astro.",
+  "provides": ["billing.ui"],
+  "requires": {
+    "cli": "^0.1.0",
+    "capabilities": ["organizations", "billing.stripe"],
+    "extensions": []
+  },
+  "conflictsWith": [],
+  "supportedStacks": [
+    {
+      "backend": { "id": "backend:fastapi", "version": "^0.1.0" },
+      "frontend": { "id": "frontend:astro", "version": "^0.2.0" }
+    },
+    {
+      "backend": { "id": "backend:nestjs", "version": "^0.1.0" },
+      "frontend": { "id": "frontend:astro", "version": "^0.2.0" }
+    }
+  ],
+  "targets": [
+    {
+      "template": "frontend:astro",
+      "overlay": "overlays/frontend",
+      "replace": [
+        "astro.config.mjs",
+        "src/layouts/BaseLayout.astro",
+        "src/pages/pricing.astro",
+        "src/scripts/auth.ts"
+      ],
+      "environment": [],
+      "migrations": []
+    }
+  ]
+}

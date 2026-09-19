@@ -11,7 +11,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
+import { defaultExtensionsDirectory, defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
+import { extensionTargetFiles, resolveExtensions, selectExtensions } from './extensions.js';
+
+const cliVersion = '0.1.0';
 
 const excludedDirectoryNames = new Set([
   '.git',
@@ -55,39 +58,6 @@ function copyTemplate(templatesDirectory, destinationDirectory, kind, template) 
   });
 }
 
-function selectFrontendFeatures(frontend, featureIds) {
-  if (featureIds.length > 0 && !frontend) {
-    throw new Error('Optional features require a frontend template.');
-  }
-
-  const availableFeatures = new Map((frontend?.features ?? []).map((feature) => [feature.id, feature]));
-  const selectedFeatures = [];
-  const selectedIds = new Set();
-
-  for (const featureId of featureIds) {
-    if (selectedIds.has(featureId)) throw new Error(`Feature "${featureId}" was selected more than once.`);
-    const feature = availableFeatures.get(featureId);
-    if (!feature) throw new Error(`Unknown optional feature "${featureId}" for frontend "${frontend.key}".`);
-    selectedIds.add(featureId);
-    selectedFeatures.push(feature);
-  }
-
-  return selectedFeatures;
-}
-
-function copyFrontendFeatures(destinationDirectory, frontend, features) {
-  const frontendDirectory = join(destinationDirectory, 'frontend');
-  for (const feature of features) {
-    const sourceDirectory = join(frontend.sourceDirectory, '.features', feature.id);
-    if (!existsSync(sourceDirectory)) {
-      throw new Error(`Frontend feature source not found: ${sourceDirectory}`);
-    }
-    for (const entry of readdirSync(sourceDirectory, { withFileTypes: true })) {
-      cpSync(join(sourceDirectory, entry.name), join(frontendDirectory, entry.name), { recursive: true, force: true });
-    }
-  }
-}
-
 function configureFrontendApiProxyTarget(destinationDirectory, backend) {
   const envExamplePath = join(destinationDirectory, 'frontend', '.env.example');
   if (!existsSync(envExamplePath)) {
@@ -107,15 +77,15 @@ function configureFrontendApiProxyTarget(destinationDirectory, backend) {
   writeFileSync(envExamplePath, configuredContents, 'utf8');
 }
 
-function frontendApiPrefixes(frontend, features = []) {
+function frontendApiPrefixes(frontend, extensions = []) {
   const requiredCapabilities = [
     ...(frontend?.compatibility?.requiresBackendCapabilities ?? []),
-    ...features.flatMap((feature) => feature.requiresBackendCapabilities),
+    ...extensions.flatMap((extension) => extension.requires.capabilities),
   ];
-  const prefixes = ['auth', 'users'];
+  const prefixes = ['auth', 'users', ...extensions.flatMap((extension) => extension.apiPrefixes ?? [])];
   if (requiredCapabilities.includes('organizations')) prefixes.push('organizations');
   if (requiredCapabilities.includes('billing.stripe')) prefixes.push('billing');
-  return prefixes;
+  return [...new Set(prefixes)];
 }
 
 function backendDatabaseUrl(backend) {
@@ -361,7 +331,7 @@ Usa \`docker compose ... down -v\` sólo para descartar deliberadamente los dato
 `;
 }
 
-function writeDeployment(destinationDirectory, backend, frontend, frontendFeatures) {
+function writeDeployment(destinationDirectory, backend, frontend, extensions) {
   const deploymentDirectory = join(destinationDirectory, 'deployment');
   mkdirSync(deploymentDirectory, { recursive: true });
   writeFileSync(join(deploymentDirectory, 'compose.yaml'), deploymentCompose(backend, frontend), 'utf8');
@@ -371,7 +341,7 @@ function writeDeployment(destinationDirectory, backend, frontend, frontendFeatur
   if (frontend) {
     writeFileSync(join(deploymentDirectory, '.dockerignore'), '.env\ncerts/\n', 'utf8');
     writeFileSync(join(deploymentDirectory, 'gateway.Dockerfile'), 'FROM nginx:1.27.4-alpine-slim\nCOPY nginx.conf /etc/nginx/conf.d/default.conf\n', 'utf8');
-  const apiPrefixes = frontendApiPrefixes(frontend, frontendFeatures).join('|');
+  const apiPrefixes = frontendApiPrefixes(frontend, extensions).join('|');
   writeFileSync(join(deploymentDirectory, 'nginx.conf'), `server {
   listen 80;
   server_name _;
@@ -418,10 +388,9 @@ ${backend ? `  location = /ready {
   }
 }
 
-function assertCompatibleTemplates(backend, frontend, features = []) {
+function assertCompatibleTemplates(backend, frontend) {
   const requiredCapabilities = [
     ...(frontend.compatibility?.requiresBackendCapabilities ?? []),
-    ...features.flatMap((feature) => feature.requiresBackendCapabilities),
   ];
   const backendCapabilities = new Set(backend.capabilities);
   const missingCapabilities = requiredCapabilities.filter((capability) => !backendCapabilities.has(capability));
@@ -434,12 +403,88 @@ function assertCompatibleTemplates(backend, frontend, features = []) {
   }
 }
 
+function extensionInstallationPlan(extensions, backend, frontend) {
+  const templates = new Map([[backend?.id, backend], [frontend?.id, frontend]].filter(([id]) => id));
+  const baseFiles = new Map();
+  const writtenFiles = new Map();
+  const plan = [];
+  for (const extension of extensions) {
+    for (const target of extension.targets) {
+      const template = templates.get(target.template);
+      if (!template) throw new Error(`Extension "${extension.id}" requires template "${target.template}".`);
+      if (!baseFiles.has(template.id)) baseFiles.set(template.id, new Set(templateFiles(template.sourceDirectory)));
+      const files = extensionTargetFiles(extension, target);
+      const fileNames = new Set(files.map(({ relativePath }) => relativePath));
+      for (const replacement of target.replace) {
+        if (!fileNames.has(replacement)) throw new Error(`Extension "${extension.id}" declares replacement "${replacement}" that is not in its overlay.`);
+        if (!baseFiles.get(template.id).has(replacement)) throw new Error(`Extension "${extension.id}" declares replacement "${replacement}" that does not exist in ${target.template}.`);
+      }
+      for (const migration of target.migrations) {
+        if (!fileNames.has(migration)) throw new Error(`Extension "${extension.id}" declares migration "${migration}" that is not in its overlay.`);
+      }
+      for (const file of files) {
+        if (file.relativePath === '.env.example') throw new Error(`Extension "${extension.id}" must declare environment variables instead of overlaying .env.example.`);
+        const destinationKey = `${target.template}/${file.relativePath}`;
+        if (writtenFiles.has(destinationKey)) throw new Error(`Extensions "${writtenFiles.get(destinationKey)}" and "${extension.id}" both write "${destinationKey}".`);
+        if (baseFiles.get(template.id).has(file.relativePath) && !target.replace.includes(file.relativePath)) {
+          throw new Error(`Extension "${extension.id}" would replace Community file "${destinationKey}" without declaring it.`);
+        }
+        writtenFiles.set(destinationKey, extension.id);
+      }
+      plan.push({ extension, target, template, files });
+    }
+  }
+  return plan;
+}
+
+function templateFiles(directory) {
+  const files = [];
+  function visit(current) {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (!shouldCopy(join(current, entry.name))) continue;
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) visit(path);
+      if (entry.isFile()) files.push(resolve(path));
+    }
+  }
+  visit(directory);
+  return files.map((file) => file.slice(resolve(directory).length + 1).replaceAll('\\', '/'));
+}
+
+function mergeEnvironment(destinationDirectory, kind, variables, extensionId) {
+  if (variables.length === 0) return;
+  const environmentPath = join(destinationDirectory, kind, '.env.example');
+  if (!existsSync(environmentPath)) throw new Error(`Extension "${extensionId}" requires .env.example in ${kind}.`);
+  const contents = readFileSync(environmentPath, 'utf8');
+  const values = new Map([...contents.matchAll(/^([A-Z][A-Z0-9_]*)=(.*)$/gm)].map(([, name, value]) => [name, value]));
+  const additions = [];
+  for (const variable of variables) {
+    const existing = values.get(variable.name);
+    if (existing !== undefined && existing !== variable.value) throw new Error(`Extension "${extensionId}" conflicts with ${kind} environment variable "${variable.name}".`);
+    if (existing === undefined) additions.push(`# ${variable.description}\n${variable.name}=${variable.secret ? '' : variable.value}`);
+  }
+  if (additions.length > 0) writeFileSync(environmentPath, `${contents.replace(/\s*$/, '')}\n\n${additions.join('\n\n')}\n`, 'utf8');
+}
+
+function applyExtensions(destinationDirectory, plan) {
+  for (const { extension, target, template, files } of plan) {
+    const kind = template.kind;
+    for (const file of files) {
+      const destination = join(destinationDirectory, kind, file.relativePath);
+      mkdirSync(dirname(destination), { recursive: true });
+      copyFileSync(file.source, destination);
+    }
+    mergeEnvironment(destinationDirectory, kind, target.environment, extension.id);
+  }
+}
+
 export function generateProject({
   destination,
   backendId,
   frontendId,
   featureIds = [],
   templatesDirectory = defaultTemplatesDirectory,
+  extensionsDirectories = [defaultExtensionsDirectory],
 }) {
   if (!backendId && !frontendId) {
     throw new Error('Select at least one template with --backend or --frontend.');
@@ -451,17 +496,14 @@ export function generateProject({
     throw new Error(`Destination already exists: ${outputDirectory}`);
   }
 
-  const catalog = loadCatalog(templatesDirectory);
+  const catalog = loadCatalog(templatesDirectory, extensionsDirectories);
   const backend = backendId ? findTemplate(catalog, 'backend', backendId) : undefined;
   const frontend = frontendId ? findTemplate(catalog, 'frontend', frontendId) : undefined;
-  const frontendFeatures = selectFrontendFeatures(frontend, featureIds);
-
-  if (!backend && frontendFeatures.some((feature) => feature.requiresBackendCapabilities.length > 0)) {
-    throw new Error('The selected frontend features require a backend template.');
-  }
+  const extensions = resolveExtensions(selectExtensions(catalog.extensions, featureIds), { backend, frontend, cliVersion });
+  const installationPlan = extensionInstallationPlan(extensions, backend, frontend);
 
   if (backend && frontend) {
-    assertCompatibleTemplates(backend, frontend, frontendFeatures);
+    assertCompatibleTemplates(backend, frontend);
   }
 
   const outputParentDirectory = dirname(outputDirectory);
@@ -482,14 +524,15 @@ export function generateProject({
 
     if (frontend) {
       copyTemplate(templatesDirectory, temporaryDirectory, 'frontend', frontend);
-      copyFrontendFeatures(temporaryDirectory, frontend, frontendFeatures);
     }
+
+    applyExtensions(temporaryDirectory, installationPlan);
 
     if (backend && frontend && frontend.compatibility?.requiresBackendCapabilities?.length > 0) {
       configureFrontendApiProxyTarget(temporaryDirectory, backend);
     }
 
-    writeDeployment(temporaryDirectory, backend, frontend, frontendFeatures);
+    writeDeployment(temporaryDirectory, backend, frontend, extensions);
 
     const selectedTemplates = {};
     if (backend) {
@@ -507,8 +550,13 @@ export function generateProject({
       };
     }
 
-    const metadata = { schemaVersion: 1, templates: selectedTemplates };
-    if (frontendFeatures.length > 0) metadata.features = { frontend: frontendFeatures.map((feature) => feature.id) };
+    const metadata = { schemaVersion: 2, templates: selectedTemplates };
+    if (extensions.length > 0) metadata.extensions = extensions.map((extension) => ({
+      id: extension.id,
+      version: extension.version,
+      source: extension.directory,
+      manifestSchemaVersion: extension.schemaVersion,
+    }));
 
     writeFileSync(
       join(temporaryDirectory, '.create-my-saas.json'),
@@ -529,5 +577,5 @@ export function generateProject({
     throw new Error(`Could not generate project at ${outputDirectory}: ${error.message}`, { cause: error });
   }
 
-  return { outputDirectory, backend, frontend, frontendFeatures };
+  return { outputDirectory, backend, frontend, extensions };
 }

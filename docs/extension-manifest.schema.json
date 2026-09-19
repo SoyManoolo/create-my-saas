@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://create-my-saas.dev/schemas/extension-manifest-v1.json",
+  "title": "create-my-saas extension manifest",
+  "description": "Metadata for a versioned Community or Pro extension.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "version", "displayName", "description", "provides", "requires", "supportedStacks", "targets"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" },
+    "aliases": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "displayName": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "provides": { "$ref": "#/$defs/capabilities" },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cli", "capabilities", "extensions"],
+      "properties": {
+        "cli": { "type": "string", "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|\\^[0-9]+\\.[0-9]+\\.[0-9]+)$" },
+        "capabilities": { "$ref": "#/$defs/capabilities" },
+        "extensions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" }, "version": { "type": "string", "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|\\^[0-9]+\\.[0-9]+\\.[0-9]+)$" } } }
+        }
+      }
+    },
+    "conflictsWith": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" } },
+    "apiPrefixes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
+    "supportedStacks": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "object", "additionalProperties": false, "properties": { "backend": { "$ref": "#/$defs/template" }, "frontend": { "$ref": "#/$defs/template" } }, "minProperties": 1 }
+    },
+    "targets": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "object", "additionalProperties": false, "required": ["template", "overlay", "replace", "environment", "migrations"], "properties": { "template": { "type": "string", "pattern": "^(backend|frontend):[a-z0-9]+(?:-[a-z0-9]+)*$" }, "overlay": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" }, "replace": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }, "environment": { "type": "array", "items": { "$ref": "#/$defs/environment" } }, "migrations": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } } } }
+    }
+  },
+  "$defs": {
+    "capabilities": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$" } },
+    "template": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "pattern": "^(backend|frontend):[a-z0-9]+(?:-[a-z0-9]+)*$" }, "version": { "type": "string", "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|\\^[0-9]+\\.[0-9]+\\.[0-9]+)$" } } },
+    "environment": { "type": "object", "additionalProperties": false, "required": ["name", "value", "secret", "description"], "properties": { "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }, "value": { "type": "string" }, "secret": { "type": "boolean" }, "description": { "type": "string", "minLength": 1 } }, "allOf": [{ "if": { "properties": { "secret": { "const": true } } }, "then": { "properties": { "value": { "const": "" } } }] }
+  }
+}

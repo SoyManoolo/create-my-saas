@@ -3,10 +3,12 @@
 Generates a project by discovering the individual `template.manifest.json` files
 in the `templates` directory.
 
-Some frontend templates expose optional features. Select one with repeatable
-`--feature <id>` flags; the generator validates the selected backend before
-copying its overlay. For example, Astro's organization-scoped Stripe UI is
-enabled with `--feature billing` and requires FastAPI or NestJS.
+Extensions are versioned overlays with their own manifests. Select one with
+repeatable `--feature <id>` flags; the generator validates the complete stack
+before writing files. The public `community:astro-billing` extension retains
+the short selector `--feature billing` and requires FastAPI or NestJS. A
+future private Pro directory can be supplied explicitly with
+`--extensions-dir <path>`; the CLI never downloads one implicitly.
 
 From this repository, run:
 

@@ -1,9 +1,11 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadExtensions } from './extensions.js';
 
 const packageDirectory = dirname(fileURLToPath(import.meta.url));
 export const defaultTemplatesDirectory = join(packageDirectory, '../../../templates');
+export const defaultExtensionsDirectory = join(packageDirectory, '../../../extensions');
 
 function readTemplateManifest(templatesDirectory, kind, directoryName) {
   const sourceDirectory = join(templatesDirectory, kind, directoryName);
@@ -61,10 +63,20 @@ function discoverTemplates(templatesDirectory, kind) {
   return templates;
 }
 
-export function loadCatalog(templatesDirectory = defaultTemplatesDirectory) {
+export function loadCatalog(templatesDirectory = defaultTemplatesDirectory, extensionsDirectories = [defaultExtensionsDirectory]) {
+  const directories = Array.isArray(extensionsDirectories) ? extensionsDirectories : [extensionsDirectories];
+  const extensions = directories.flatMap((directory) => loadExtensions(directory));
+  const identifiers = new Set();
+  for (const extension of extensions) {
+    for (const identifier of [extension.id, ...(extension.aliases ?? [])]) {
+      if (identifiers.has(identifier)) throw new Error(`Duplicate extension ID or alias: ${identifier}.`);
+      identifiers.add(identifier);
+    }
+  }
   return {
     backend: discoverTemplates(templatesDirectory, 'backend'),
     frontend: discoverTemplates(templatesDirectory, 'frontend'),
+    extensions,
   };
 }
 

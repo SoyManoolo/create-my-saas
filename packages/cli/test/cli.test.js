@@ -102,21 +102,28 @@ function assertFailedGenerationIsClean({ workspace, templatesDirectory, generate
 test('parses template selections and a destination', () => {
   assert.deepEqual(
     parseArguments(['demo', '--backend', 'nestjs', '--frontend', 'nextjs']),
-    { destination: 'demo', backendId: 'nestjs', frontendId: 'nextjs', featureIds: [], list: false, help: false },
+    { destination: 'demo', backendId: 'nestjs', frontendId: 'nextjs', featureIds: [], extensionsDirectories: [], list: false, help: false },
   );
 });
 
 test('parses equals-style template selections', () => {
   assert.deepEqual(
     parseArguments(['demo', '--backend=fastapi', '--frontend=nextjs']),
-    { destination: 'demo', backendId: 'fastapi', frontendId: 'nextjs', featureIds: [], list: false, help: false },
+    { destination: 'demo', backendId: 'fastapi', frontendId: 'nextjs', featureIds: [], extensionsDirectories: [], list: false, help: false },
   );
 });
 
 test('parses repeatable optional frontend features', () => {
   assert.deepEqual(
     parseArguments(['demo', '--frontend=astro', '--feature', 'billing']),
-    { destination: 'demo', backendId: undefined, frontendId: 'astro', featureIds: ['billing'], list: false, help: false },
+    { destination: 'demo', backendId: undefined, frontendId: 'astro', featureIds: ['billing'], extensionsDirectories: [], list: false, help: false },
+  );
+});
+
+test('parses explicit local extension directories', () => {
+  assert.deepEqual(
+    parseArguments(['demo', '--backend', 'fastapi', '--extensions-dir', 'C:/pro/extensions', '--extensions-dir=./extra']),
+    { destination: 'demo', backendId: 'fastapi', frontendId: undefined, featureIds: [], extensionsDirectories: ['C:/pro/extensions', './extra'], list: false, help: false },
   );
 });
 
@@ -223,7 +230,7 @@ test('removes its temporary project when frontend configuration fails', (t) => {
   });
 });
 
-test('removes its temporary project when an optional feature copy fails', (t) => {
+test('rejects an unknown extension without creating output', (t) => {
   const workspace = temporaryDirectory();
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
   const templatesDirectory = createTestTemplates(workspace, { frontendFeature: false });
@@ -232,7 +239,7 @@ test('removes its temporary project when an optional feature copy fails', (t) =>
     workspace,
     templatesDirectory,
     generate: { featureIds: ['optional'] },
-    error: /Frontend feature source not found/,
+    error: /Unknown extension "optional"/,
   });
 });
 
@@ -326,7 +333,7 @@ test('rejects Astro billing with Fastify before creating output', (t) => {
       featureIds: ['billing'],
       templatesDirectory: defaultTemplatesDirectory,
     }),
-    /Missing backend capabilities: organizations, billing\.stripe/,
+    /does not support the selected template stack/,
   );
   assert.equal(existsSync(destination), false);
 });
@@ -343,7 +350,7 @@ test('rejects Astro billing without a backend before creating output', (t) => {
       featureIds: ['billing'],
       templatesDirectory: defaultTemplatesDirectory,
     }),
-    /selected frontend features require a backend template/,
+    /does not support the selected template stack/,
   );
   assert.equal(existsSync(destination), false);
 });
@@ -365,7 +372,11 @@ test('generates Astro billing with NestJS and records the selected feature', (t)
   assert.match(readFileSync(join(destination, 'frontend', 'astro.config.mjs'), 'utf8'), /organizations/);
   assert.match(readFileSync(join(destination, 'frontend', 'astro.config.mjs'), 'utf8'), /billing/);
   const metadata = JSON.parse(readFileSync(join(destination, '.create-my-saas.json'), 'utf8'));
-  assert.deepEqual(metadata.features, { frontend: ['billing'] });
+  assert.equal(metadata.schemaVersion, 2);
+  assert.deepEqual(metadata.extensions, [{
+    id: 'community:astro-billing', version: '1.0.0', source: 'community-astro-billing', manifestSchemaVersion: 1,
+  }]);
+  assert.match(readFileSync(join(destination, 'frontend', '.env.example'), 'utf8'), /^PUBLIC_POSTHOG_KEY=$/m);
 });
 
 test('rejects an unknown template without creating output', (t) => {

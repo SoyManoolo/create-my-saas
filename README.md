@@ -153,6 +153,7 @@ ejecuta las comprobaciones locales y crea el tag correspondiente.
 ## Documentación adicional
 
 - [Contrato de los manifiestos](./docs/template-manifests.md)
+- [Contrato de extensiones](./docs/extension-manifests.md)
 - [Límite de producto y extensiones Community/Pro](./docs/community-pro-boundary.md)
 - [Publicar una release de la CLI](./docs/releasing.md)
 - [Despliegue reproducible](./docs/deployment.md)

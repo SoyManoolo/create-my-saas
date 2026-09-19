@@ -68,16 +68,10 @@ combination when its supported compatibility rules do not cover the selected
 backend and frontend. Manifests advertise capabilities; they do not by
 themselves promise API compatibility.
 
-## Optional frontend features
+## Extensions
 
-Frontend manifests may declare optional `features`. A feature has its own
-capabilities and required backend capabilities, and is selected with the CLI's
-repeatable `--feature <id>` option. The generator copies the feature overlay
-from `.features/<id>/` only after the base template and records the selection
-in `.create-my-saas.json`. Features with backend requirements cannot be
-selected without a backend.
-
-For example, Astro's base authenticated area works with Fastify, FastAPI, and
-NestJS. Its optional `billing` feature adds organization-scoped Stripe flows,
-so the CLI permits it only with a backend that declares `organizations` and
-`billing.stripe`.
+Optional behavior is supplied by independent extension manifests rather than
+by a frontend template. See [the extension-manifest contract](./extension-manifests.md).
+For example, Astro's `billing` selector resolves to the public
+`community:astro-billing` extension. Its manifest permits only FastAPI or
+NestJS because those backends declare `organizations` and `billing.stripe`.

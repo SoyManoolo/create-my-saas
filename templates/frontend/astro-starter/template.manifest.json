@@ -42,19 +42,6 @@
       "oauth.github"
     ]
   },
-  "features": [
-    {
-      "id": "billing",
-      "description": "Organization-scoped Stripe billing, Checkout, and Customer Portal.",
-      "capabilities": [
-        "billing.stripe"
-      ],
-      "requiresBackendCapabilities": [
-        "organizations",
-        "billing.stripe"
-      ]
-    }
-  ],
   "environment": {
     "required": [
       {
