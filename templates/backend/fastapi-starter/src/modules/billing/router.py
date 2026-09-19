@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.database import get_db
@@ -14,7 +14,12 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 class CreateCheckout(BaseModel):
-    price_id: str = Field(pattern=r"^price_[A-Za-z0-9]+$")
+    # The generated TypeScript clients use the public camelCase API while the
+    # service keeps Python's snake_case convention internally.
+    price_id: str = Field(
+        pattern=r"^price_[A-Za-z0-9]+$",
+        validation_alias=AliasChoices("priceId", "price_id"),
+    )
     quantity: int = Field(default=1, ge=1, le=1000)
 
 

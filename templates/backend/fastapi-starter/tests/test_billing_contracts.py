@@ -10,10 +10,15 @@ from fastapi.testclient import TestClient
 from main import app
 from src.core.config import settings
 from src.core.exceptions import AppError
+from src.modules.billing.router import CreateCheckout
 from src.modules.billing.service import BillingService
 
 
 class BillingContractTests(unittest.TestCase):
+    def test_checkout_accepts_the_public_camel_case_price_id(self):
+        self.assertEqual(CreateCheckout.model_validate({"priceId": "price_allowed"}).price_id, "price_allowed")
+        self.assertEqual(CreateCheckout.model_validate({"price_id": "price_allowed"}).price_id, "price_allowed")
+
     def test_unconfigured_billing_is_explicit_and_free_entitlements_are_validated(self):
         service = BillingService(AsyncMock(), replace(settings, stripe_secret_key=None, stripe_webhook_secret=None, stripe_price_plans="{}", billing_free_entitlements='{"api_calls":100}'))
         self.assertEqual(service.configuration(), {"configured": False, "provider": "stripe", "usageMeterConfigured": False, "plans": []})
