@@ -247,10 +247,21 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_starter
       SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
       POSTGRES_INTEGRATION_TESTS: "1"
+      REDIS_URL: redis://localhost:6379
+      REDIS_INTEGRATION_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -372,11 +383,22 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fastify_starter
       FRONTEND_URL: http://localhost:3000
       CORS_ORIGINS: http://localhost:3000
       SECRET_KEY: ci-only-secret-that-is-long-enough-for-validation
+      REDIS_URL: redis://localhost:6379
+      REDIS_INTEGRATION_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
