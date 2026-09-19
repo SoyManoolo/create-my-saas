@@ -12,12 +12,19 @@ const options = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, i
 }, []));
 const backend = options.backend;
 const frontend = options.frontend;
+const featureIds = (options.feature ?? '').split(',').map((feature) => feature.trim()).filter(Boolean);
+const featureKey = featureIds.slice().sort().join(',');
+const supportedCombinations = new Set([
+  'fastapi:nextjs:', 'fastapi:react-router:', 'fastapi:astro:', 'fastapi:astro:billing',
+  'nestjs:nextjs:', 'nestjs:react-router:', 'nestjs:astro:', 'nestjs:astro:billing',
+  'fastify:astro:',
+]);
 
-if (!['fastapi', 'nestjs'].includes(backend) || !['nextjs', 'react-router', 'astro'].includes(frontend)) {
-  throw new Error('Usage: node scripts/e2e-generated-projects.mjs --backend fastapi|nestjs --frontend nextjs|react-router|astro');
+if (!supportedCombinations.has(`${backend}:${frontend}:${featureKey}`)) {
+  throw new Error('Usage: node scripts/e2e-generated-projects.mjs --backend fastapi|nestjs|fastify --frontend nextjs|react-router|astro [--feature billing].');
 }
 
-const apiPort = backend === 'fastapi' ? 8000 : 3001;
+const apiPort = { fastapi: 8000, nestjs: 3001, fastify: 3002 }[backend];
 const frontendPort = 3100;
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
@@ -208,10 +215,10 @@ async function verifyBrowserSessionThroughProxy() {
 }
 
 async function verifyExternalProvidersAreIsolated() {
-  const oauth = backend === 'nestjs'
-    ? await request('/auth/oauth/providers')
-    : await request('/auth/oauth/google/start');
-  if (backend === 'nestjs') {
+  const oauth = backend === 'fastapi'
+    ? await request('/auth/oauth/google/start')
+    : await request('/auth/oauth/providers');
+  if (backend !== 'fastapi') {
     await expectStatus(oauth, 200, 'OAuth provider configuration failed');
     assert.ok((await oauth.json()).every((provider) => provider.configured === false), 'the controlled OAuth providers must remain disabled.');
   } else {
@@ -235,7 +242,11 @@ let web;
 try {
   generatedRoot = await mkdtemp(join(tmpdir(), `create-my-saas-${backend}-${frontend}-`));
   generatedProject = join(generatedRoot, 'project');
-  await run(process.execPath, [join(root, 'packages/cli/bin/create-my-saas.js'), generatedProject, '--backend', backend, '--frontend', frontend], { cwd: root });
+  await run(process.execPath, [
+    join(root, 'packages/cli/bin/create-my-saas.js'), generatedProject,
+    '--backend', backend, '--frontend', frontend,
+    ...featureIds.flatMap((feature) => ['--feature', feature]),
+  ], { cwd: root });
 
   const backendDirectory = join(generatedProject, 'backend');
   const frontendDirectory = join(generatedProject, 'frontend');
@@ -246,10 +257,10 @@ try {
     await waitFor(`${apiOrigin}/health`, api);
   } else {
     await run('pnpm', ['install', '--frozen-lockfile'], { cwd: backendDirectory });
-    await run('pnpm', ['run', 'migration:run'], { cwd: backendDirectory });
+    await run('pnpm', ['run', backend === 'nestjs' ? 'migration:run' : 'db:migrate'], { cwd: backendDirectory });
     await run('pnpm', ['run', 'build'], { cwd: backendDirectory });
-    api = start('node', ['dist/main'], { cwd: backendDirectory });
-    await waitFor(`${apiOrigin}/`, api);
+    api = start('node', [backend === 'nestjs' ? 'dist/main' : 'dist/server.js'], { cwd: backendDirectory });
+    await waitFor(`${apiOrigin}/${backend === 'nestjs' ? '' : 'health'}`, api);
   }
 
   await run('pnpm', ['install', '--frozen-lockfile'], { cwd: frontendDirectory });
@@ -260,7 +271,7 @@ try {
   await waitFor(`${frontendOrigin}/`, web);
   await verifyExternalProvidersAreIsolated();
   await verifyBrowserSessionThroughProxy();
-  console.log(`Generated ${backend} + ${frontend} HTTP session contract E2E passed.`);
+  console.log(`Generated ${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} HTTP session contract E2E passed.`);
 } finally {
   await stop(web);
   await stop(api);

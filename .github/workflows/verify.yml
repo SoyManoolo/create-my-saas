@@ -101,7 +101,7 @@ jobs:
           pnpm run build
 
   generated-project-e2e:
-    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} HTTP contract E2E
+    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }}${{ matrix.features && format(' + {0}', matrix.features) || '' }} HTTP contract E2E
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -118,6 +118,14 @@ jobs:
           - backend: nestjs
             frontend: react-router
           - backend: nestjs
+            frontend: astro
+          - backend: fastapi
+            frontend: astro
+            features: billing
+          - backend: nestjs
+            frontend: astro
+            features: billing
+          - backend: fastify
             frontend: astro
     services:
       postgres:
@@ -158,9 +166,10 @@ jobs:
         run: >-
           node scripts/e2e-generated-projects.mjs
           --backend "${{ matrix.backend }}" --frontend "${{ matrix.frontend }}"
+          ${{ matrix.features && format('--feature {0}', matrix.features) || '' }}
 
   generated-project-browser-e2e:
-    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }} Playwright E2E
+    name: Generated ${{ matrix.backend }} + ${{ matrix.frontend }}${{ matrix.features && format(' + {0}', matrix.features) || '' }} Playwright E2E
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -168,8 +177,22 @@ jobs:
         include:
           - backend: fastapi
             frontend: nextjs
+          - backend: fastapi
+            frontend: react-router
+          - backend: fastapi
+            frontend: astro
+          - backend: fastapi
+            frontend: astro
+            features: billing
+          - backend: nestjs
+            frontend: nextjs
           - backend: nestjs
             frontend: react-router
+          - backend: nestjs
+            frontend: astro
+          - backend: nestjs
+            frontend: astro
+            features: billing
           - backend: fastify
             frontend: astro
     services:
@@ -216,11 +239,12 @@ jobs:
         env:
           E2E_BACKEND: ${{ matrix.backend }}
           E2E_FRONTEND: ${{ matrix.frontend }}
+          E2E_FEATURES: ${{ matrix.features || '' }}
       - name: Upload Playwright diagnostics
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-${{ matrix.backend }}-${{ matrix.frontend }}
+          name: playwright-${{ matrix.backend }}-${{ matrix.frontend }}${{ matrix.features && format('-{0}', matrix.features) || '' }}
           path: |
             playwright-report/
             test-results/
