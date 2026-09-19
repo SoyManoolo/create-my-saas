@@ -67,23 +67,23 @@ export class AuthService {
         return { kind: session.replacedById ? 'reused' as const : 'invalid' as const };
       }
 
+      const user = await manager.getRepository(User).findOneBy({ id: session.userId, isActive: true });
+      if (!user) return { kind: 'invalid' as const };
       const nextRaw = this.newOpaqueToken();
+      const replacement = await sessions.save(sessions.create({
+        id: this.sessionIdFromToken(nextRaw), userId: user.id, tokenHash: this.hashToken(nextRaw),
+        expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000),
+        revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null,
+      }));
       const changed = await sessions.update(
         { id: session.id, revokedAt: IsNull(), expiresAt: MoreThan(now) },
-        { revokedAt: now, replacedById: this.sessionIdFromToken(nextRaw) },
+        { revokedAt: now, replacedById: replacement.id },
       );
       if (!changed.affected) {
         await sessions.update({ userId: session.userId, revokedAt: IsNull() }, { revokedAt: now });
         return { kind: 'reused' as const };
       }
 
-      const user = await manager.getRepository(User).findOneBy({ id: session.userId, isActive: true });
-      if (!user) return { kind: 'invalid' as const };
-      await sessions.save(sessions.create({
-        id: this.sessionIdFromToken(nextRaw), userId: user.id, tokenHash: this.hashToken(nextRaw),
-        expiresAt: new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_EXPIRE_DAYS', 30) * 86_400_000),
-        revokedAt: null, replacedById: null, ipAddress: metadata.ip ?? null, userAgent: metadata.userAgent ?? null,
-      }));
       return { kind: 'rotated' as const, user, nextRaw };
     });
     if (outcome.kind === 'rotated') {
