@@ -434,7 +434,7 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
       });
       expect(configuration).toMatchObject({ status: 200, body: { configured: false, provider: 'stripe' } });
       const checkout = await browserApi(page, billingPath(organization.id, 'checkout'), {
-        method: 'POST', accessToken: ownerSession.accessToken ?? ownerSession.access_token, body: { priceId: 'price_browser_e2e', quantity: 1 },
+        method: 'POST', accessToken: ownerSession.accessToken ?? ownerSession.access_token, body: { priceId: 'price_browsere2e', quantity: 1 },
       });
       expect(checkout).toMatchObject({ status: 200, body: { configured: false, url: null } });
 
