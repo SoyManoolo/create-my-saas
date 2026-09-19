@@ -15,7 +15,8 @@ export class BillingController {
   constructor(private readonly billing: BillingService) {}
   @Get('subscription') subscription(@Param('organizationId') id: string) { return this.billing.snapshot(id); }
   @Get('configuration') configuration() { return this.billing.configuration(); }
-  @Post('checkout') checkout(@CurrentUser() user: User, @Param('organizationId') id: string, @Body() body: CreateCheckoutDto) { return this.billing.checkout(id, body.priceId, body.quantity, user.id); }
+  @Post('checkout') @HttpCode(200)
+  checkout(@CurrentUser() user: User, @Param('organizationId') id: string, @Body() body: CreateCheckoutDto) { return this.billing.checkout(id, body.priceId, body.quantity, user.id); }
   @Post('portal') portal(@CurrentUser() user: User, @Param('organizationId') id: string) { return this.billing.portal(id, user.id); }
 }
 
