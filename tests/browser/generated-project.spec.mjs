@@ -310,7 +310,7 @@ test(`${backend} + ${frontend}${featureKey ? ` + ${featureKey}` : ''} exercises 
     await page.locator('a[href^="/forgot-password"]').click();
     await expectPath(page, paths.forgot);
     await page.locator('input[name="email"]').fill(credentials.email);
-    const response = await waitForApi(page, '/auth/password/reset/request', () => page.locator('button[type="submit"]').click());
+    const response = await waitForApi(page, '/auth/password/reset/request', () => page.getByRole('button', { name: /Enviar (enlace|instrucciones)/i }).click());
     expect(response.ok()).toBe(true);
     await expect(page.getByText(/Si existe una cuenta con ese (correo|email)/i)).toBeVisible();
 
