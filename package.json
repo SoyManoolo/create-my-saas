@@ -45,6 +45,7 @@
     "test:e2e:browser": "playwright test",
     "test:e2e:contract": "node scripts/e2e-generated-projects.mjs --backend fastapi --frontend nextjs",
     "test:e2e:generated": "node scripts/e2e-generated-projects.mjs --backend fastapi --frontend nextjs",
+    "audit:public": "node scripts/audit-public-repository.mjs",
     "validate:templates": "node scripts/validate-template-manifests.mjs && node scripts/validate-extension-manifests.mjs",
     "validate:extensions": "node scripts/validate-extension-manifests.mjs"
   },

@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Audit public repository boundary
+        run: npm run audit:public
       - name: Validate Community manifests
         run: npm run validate:templates
       - name: Run generator tests
