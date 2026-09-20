@@ -4,7 +4,7 @@ Las releases de `@soymanolo/create-my-saas` se publican automáticamente desde
 un tag Git. El workflow valida la versión, ejecuta las comprobaciones de la
 CLI, inspecciona el contenido de npm, publica el paquete y crea la GitHub
 Release con notas generadas a partir de los commits. La excepción es el tag de
-arranque `v0.1.0`, detallado abajo.
+arranque `v1.0.0`, detallado abajo.
 
 ## Configuración única antes de la primera publicación
 
@@ -31,7 +31,7 @@ arranque `v0.1.0`, detallado abajo.
    públicamente.
 
 La primera vez es necesario que el paquete exista para poder configurar el
-proveedor de confianza. Publica `0.1.0` manualmente desde un checkout limpio:
+proveedor de confianza. Publica `1.0.0` manualmente desde un checkout limpio:
 
 ```sh
 npm login
@@ -40,8 +40,8 @@ npm publish
 
 No copies el token de npm a este repositorio, a secretos de GitHub ni a un chat.
 Después de esa publicación inicial, configura el proveedor de confianza y crea
-el tag `v0.1.0`. El workflow confirma que `0.1.0` ya existe en npm y crea la
-GitHub Release sin volver a publicar. Desde `0.1.1`, las publicaciones serán
+el tag `v1.0.0`. El workflow confirma que `1.0.0` ya existe en npm y crea la
+GitHub Release sin volver a publicar. Desde `1.0.1`, las publicaciones serán
 automáticas.
 
 ## Crear una release

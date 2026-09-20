@@ -17,7 +17,7 @@ template and deployment environment variables, migration files and any public AP
 are incorporated into the generated gateway configuration; an extension with
 new HTTP routes must declare them. Version constraints intentionally
 support only an exact semantic version or a caret range (for example,
-`^0.1.0`); this keeps the contract deterministic without accepting an
+`^1.0.0`); this keeps the contract deterministic without accepting an
 incomplete imitation of npm range syntax.
 
 Overlays are copied after their base template. New files are allowed. Replacing

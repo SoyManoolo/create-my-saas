@@ -14,7 +14,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { defaultExtensionsDirectory, defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
 import { extensionTargetFiles, resolveExtensions, selectExtensions } from './extensions.js';
 
-const cliVersion = '0.1.1';
+const cliVersion = '1.0.0';
 
 const excludedDirectoryNames = new Set([
   '.git',

@@ -8,7 +8,7 @@
   "description": "Organization-scoped Stripe Checkout and Customer Portal for Astro.",
   "provides": ["billing.ui"],
   "requires": {
-    "cli": "^0.1.0",
+    "cli": "^1.0.0",
     "capabilities": ["organizations", "billing.stripe"],
     "extensions": []
   },

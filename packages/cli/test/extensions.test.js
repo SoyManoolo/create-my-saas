@@ -17,7 +17,7 @@ function extensionManifest(id, overrides = {}) {
     displayName: id,
     description: 'Test extension.',
     provides: [],
-    requires: { cli: '^0.1.0', capabilities: [], extensions: [] },
+    requires: { cli: '^1.0.0', capabilities: [], extensions: [] },
     conflictsWith: [],
     supportedStacks: [{ backend: { id: 'backend:test', version: '^1.0.0' }, frontend: { id: 'frontend:test', version: '^1.0.0' } }],
     targets: [],
@@ -74,7 +74,7 @@ test('installs ordered backend and frontend extension overlays and records exact
   }), { 'backend/src/base.js': 'export const extension = true;\n', 'backend/migrations/001-base.sql': '-- base migration\n' });
   addExtension(extensions, 'addon', extensionManifest('community:addon', {
     aliases: ['addon'], provides: ['feature.addon'], apiPrefixes: ['addon-api'],
-    requires: { cli: '^0.1.0', capabilities: ['feature.base'], extensions: [{ id: 'community:base', version: '^1.0.0' }] },
+    requires: { cli: '^1.0.0', capabilities: ['feature.base'], extensions: [{ id: 'community:base', version: '^1.0.0' }] },
     targets: [{ template: 'frontend:test', overlay: 'frontend', replace: [], environment: [], migrations: [] }],
   }), { 'frontend/src/addon.js': 'export const addon = true;\n' });
 
@@ -166,7 +166,7 @@ test('rejects missing explicit dependencies and colliding extension files before
   const { root, templates, extensions } = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   addExtension(extensions, 'dependent', extensionManifest('community:dependent', {
-    requires: { cli: '^0.1.0', capabilities: [], extensions: [{ id: 'community:missing', version: '^1.0.0' }] }, targets: [{ template: 'backend:test', overlay: 'backend', replace: [], environment: [], migrations: [] }],
+    requires: { cli: '^1.0.0', capabilities: [], extensions: [{ id: 'community:missing', version: '^1.0.0' }] }, targets: [{ template: 'backend:test', overlay: 'backend', replace: [], environment: [], migrations: [] }],
   }), { 'backend/src/dependent.js': 'export {};\n' });
   const missingDestination = join(root, 'missing');
   assert.throws(() => generateProject({ destination: missingDestination, backendId: 'test', frontendId: 'test', featureIds: ['community:dependent'], templatesDirectory: templates, extensionsDirectories: [extensions] }), /requires explicit selection/);
