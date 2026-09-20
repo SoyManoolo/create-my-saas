@@ -150,6 +150,27 @@ excluye dependencias y compilados. Las publicaciones se realizan manualmente;
 antes de publicar una nueva versión, actualiza `version` en `package.json`,
 ejecuta las comprobaciones locales y crea el tag correspondiente.
 
+## Roadmap Community
+
+Las siguientes mejoras priorizan reducir el tiempo entre generar un proyecto y
+tener una aplicación lista para desarrollar:
+
+- `create-my-saas doctor`: comprobará configuración, servicios locales y
+  variables necesarias para las capacidades seleccionadas.
+- Setup local guiado: ayudará a generar secretos de desarrollo y a completar
+  las URLs locales habituales sin versionar valores sensibles.
+- Datos demo y seed: ofrecerá un proyecto recién generado con una ruta rápida
+  para crear usuarios y datos de ejemplo.
+- Contrato API tipado: reducirá divergencias entre los clientes frontend y los
+  backends generados.
+- Presets de despliegue: facilitarán configurar proveedores y entornos de
+  producción comunes.
+- Experiencia de actualización: leerá `.create-my-saas.json` para informar de
+  versiones disponibles y pasos de migración compatibles.
+
+La prioridad inmediata es `doctor` y el setup local guiado; las demás mejoras
+se abordarán según adopción y feedback de la comunidad.
+
 ## Documentación adicional
 
 - [Contrato de los manifiestos](./docs/template-manifests.md)
