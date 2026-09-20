@@ -1,6 +1,6 @@
 {
   "name": "@soymanolo/create-my-saas",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "Generate a SaaS project from versioned backend and frontend starter templates.",
   "license": "MIT",
   "repository": {
