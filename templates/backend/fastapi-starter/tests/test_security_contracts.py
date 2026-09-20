@@ -136,3 +136,42 @@ class SecurityContractTests(unittest.TestCase):
         with patch("src.modules.auth.oauth._json_request", side_effect=[{"access_token": "provider-token"}, {"email": "person@example.com", "email_verified": True}]):
             with self.assertRaisesRegex(Exception, "stable account identifier"):
                 asyncio.run(exchange_profile("google", "code", "verifier", {"token_url": "https://provider.test/token", "userinfo_url": "https://provider.test/user", "client_id": "id", "client_secret": "secret", "redirect_uri": "https://api.test/callback"}))
+
+
+class RedisFailureContractTests(unittest.TestCase):
+    class FailingRedis:
+        async def eval(self, *_args):
+            raise ConnectionError("Redis is unavailable")
+
+        async def aclose(self):
+            return None
+
+    @staticmethod
+    def limited_app():
+        limited = FastAPI()
+        limited.add_middleware(RateLimitMiddleware)
+        limited.add_api_route("/limited", lambda: {"ok": True})
+        return limited
+
+    def test_redis_failure_falls_back_to_memory_only_outside_protected_environments(self):
+        development = Settings(environment="development", rate_limit_enabled=True, rate_limit_requests=1, redis_url="redis://unused")
+        with (
+            patch.object(middleware_module, "settings", development),
+            patch.object(middleware_module, "redis_from_url", return_value=self.FailingRedis()),
+            TestClient(self.limited_app()) as client,
+        ):
+            self.assertEqual(client.get("/limited").status_code, 200)
+            limited = client.get("/limited")
+            self.assertEqual(limited.status_code, 429)
+            self.assertEqual(limited.json()["error"]["code"], "RATE_LIMITED")
+
+    def test_redis_failure_fails_closed_in_protected_environments(self):
+        staging = Settings(environment="staging", rate_limit_enabled=True, redis_url="rediss://unused")
+        with (
+            patch.object(middleware_module, "settings", staging),
+            patch.object(middleware_module, "redis_from_url", return_value=self.FailingRedis()),
+            TestClient(self.limited_app()) as client,
+        ):
+            response = client.get("/limited")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["error"]["code"], "RATE_LIMIT_UNAVAILABLE")

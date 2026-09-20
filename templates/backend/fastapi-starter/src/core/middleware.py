@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict, deque
 from time import monotonic, time
 from uuid import uuid4
@@ -23,6 +24,8 @@ SENSITIVE_AUTH_BUCKETS = {
 }
 
 SKIPPED_RATE_LIMIT_PATHS = {"/health", "/ready", "/docs", "/openapi.json"}
+REDIS_COMMAND_TIMEOUT_SECONDS = 0.3
+REDIS_RETRY_DELAY_SECONDS = 0.25
 
 
 def _rate_limit_policy(request: Request) -> tuple[str, int, int]:
@@ -80,11 +83,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
         self.requests: dict[str, deque[float]] = defaultdict(deque)
-        self.redis = (
-            redis_from_url(settings.redis_url, decode_responses=True)
-            if settings.redis_url and redis_from_url
-            else None
-        )
+        self.redis = None
+        self._redis_retry_after = 0.0
 
     async def dispatch(self, request: Request, call_next):
         if (
@@ -99,10 +99,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "unknown"
         key = f"{bucket_name}:{client_ip}"
 
-        if self._requires_redis() and not self.redis:
+        redis = self._redis_client()
+        if self._requires_redis() and not redis:
             return self._unavailable_response()
 
-        if self.redis:
+        if redis:
             rate_limited = await self._is_redis_rate_limited(
                 key,
                 window_seconds,
@@ -141,6 +142,36 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             str(window_seconds),
         )
 
+    def _redis_client(self):
+        if (
+            self.redis
+            or not settings.redis_url
+            or not redis_from_url
+            or monotonic() < self._redis_retry_after
+        ):
+            return self.redis
+        self.redis = redis_from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_connect_timeout=REDIS_COMMAND_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_COMMAND_TIMEOUT_SECONDS,
+            health_check_interval=15,
+        )
+        return self.redis
+
+    async def close(self) -> None:
+        await self._discard_redis_client(retry=False)
+
+    async def _discard_redis_client(self, retry: bool = True) -> None:
+        client, self.redis = self.redis, None
+        self._redis_retry_after = monotonic() + REDIS_RETRY_DELAY_SECONDS if retry else 0.0
+        close = getattr(client, "aclose", None)
+        if close:
+            try:
+                await close()
+            except Exception:
+                pass
+
     async def _is_redis_rate_limited(
         self,
         key: str,
@@ -151,21 +182,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             f"{settings.rate_limit_prefix}:{key}:"
             f"{int(time() // window_seconds)}"
         )
+        client = self._redis_client()
+        if not client:
+            return None
         try:
             # The expiry is established atomically with the increment. A process
             # crash cannot leave an unbounded counter behind.
-            return await self.redis.eval(
-                "local count = redis.call('INCR', KEYS[1]); "
-                "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; "
-                "return count",
-                1,
-                redis_key,
-                window_seconds,
+            return await asyncio.wait_for(
+                client.eval(
+                    "local count = redis.call('INCR', KEYS[1]); "
+                    "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; "
+                    "return count",
+                    1,
+                    redis_key,
+                    window_seconds,
+                ),
+                timeout=REDIS_COMMAND_TIMEOUT_SECONDS,
             )
         except Exception:
             # Development falls back to its in-process limiter; production and
             # staging fail closed in dispatch.
-            self.redis = None
+            await self._discard_redis_client()
             return None
 
     def _is_local_rate_limited(
