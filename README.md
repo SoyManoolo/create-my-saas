@@ -12,7 +12,7 @@ compatibles, configura su conexión local y deja registrada la selección hecha.
 ## Estado actual
 
 La CLI y el catálogo de plantillas funcionan desde este repositorio. La primera
-versión, [`saas-starter@0.1.0`](https://www.npmjs.com/package/saas-starter),
+versión, [`@soymanolo/create-my-saas@0.1.0`](https://www.npmjs.com/package/@soymanolo/create-my-saas),
 ya está publicada en npm.
 
 Actualmente hay seis plantillas:
@@ -70,7 +70,7 @@ variables y los callbacks registrados.
 Instala y ejecuta la versión publicada con `npx`:
 
 ```sh
-npx saas-starter@latest my-saas --backend nestjs --frontend nextjs
+npx @soymanolo/create-my-saas@latest my-saas --backend nestjs --frontend nextjs
 ```
 
 Para desarrollar la CLI desde este checkout:

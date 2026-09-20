@@ -1,6 +1,6 @@
 # Publicar la CLI
 
-Las releases de `saas-starter` se publican automáticamente desde
+Las releases de `@soymanolo/create-my-saas` se publican automáticamente desde
 un tag Git. El workflow valida la versión, ejecuta las comprobaciones de la
 CLI, inspecciona el contenido de npm, publica el paquete y crea la GitHub
 Release con notas generadas a partir de los commits. La excepción es el tag de
@@ -9,11 +9,11 @@ arranque `v0.1.0`, detallado abajo.
 ## Configuración única antes de la primera publicación
 
 1. Inicia sesión en npm con la cuenta propietaria de `soymanolo` y activa 2FA.
-2. Crea el paquete público `saas-starter` mediante la primera
+2. Crea el paquete público `@soymanolo/create-my-saas` mediante la primera
    publicación manual. npm exige que el paquete exista antes de configurar una
    relación de confianza. No uses el token de npm en el repositorio ni en
    GitHub Actions.
-3. En npm, abre **Packages → saas-starter → Settings → Trusted
+3. En npm, abre **Packages → @soymanolo/create-my-saas → Settings → Trusted
    Publisher** y registra GitHub Actions con estos valores:
 
    | Campo | Valor |
@@ -65,7 +65,7 @@ automáticas.
    ```
 
 4. El workflow **Publish CLI** comprueba que `X.Y.Z` coincide exactamente con
-   `package.json`. Si las verificaciones pasan, publica `saas-starter`
+   `package.json`. Si las verificaciones pasan, publica `@soymanolo/create-my-saas`
    con la etiqueta `latest` y crea la GitHub Release `vX.Y.Z`.
 
 No reutilices ni muevas tags publicados: npm no permite reemplazar una versión
@@ -76,8 +76,8 @@ existente. Para corregir una release, publica una nueva versión SemVer.
 Comprueba la versión publicada e instala la CLI sin usar el checkout:
 
 ```sh
-npm view saas-starter version
-npx saas-starter@latest example-saas --backend nestjs --frontend nextjs
+npm view @soymanolo/create-my-saas version
+npx @soymanolo/create-my-saas@latest example-saas --backend nestjs --frontend nextjs
 ```
 
 La publicación con Trusted Publishing genera automáticamente la procedencia
