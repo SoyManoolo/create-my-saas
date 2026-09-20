@@ -46,7 +46,9 @@ automáticas.
 
 ## Crear una release
 
-1. Elige una nueva versión SemVer y actualiza `version` en `package.json`.
+1. Elige una nueva versión SemVer, actualiza `version` en `package.json` y
+   añade su sección en `CHANGELOG.md`. El workflow usará el contenido de esa
+   sección como descripción de la GitHub Release.
 2. Ejecuta localmente las mismas comprobaciones:
 
    ```sh
