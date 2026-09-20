@@ -14,7 +14,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { defaultExtensionsDirectory, defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
 import { extensionTargetFiles, resolveExtensions, selectExtensions } from './extensions.js';
 
-const cliVersion = '0.1.0';
+const cliVersion = '0.1.1';
 
 const excludedDirectoryNames = new Set([
   '.git',
@@ -264,8 +264,27 @@ volumes:
 ${backend ? '  postgres-data:\n  redis-data:\n' : ''}`;
 }
 
-function productionEnvironmentExample(backend) {
-  if (!backend) return '# This static frontend has no server-side secrets.\nFRONTEND_URL=https://app.example.com\n';
+function mergeEnvironmentContents(contents, variables, extensionId, scope) {
+  if (variables.length === 0) return contents;
+  const values = new Map([...contents.matchAll(/^([A-Z][A-Z0-9_]*)=(.*)$/gm)].map(([, name, value]) => [name, value]));
+  const additions = [];
+  for (const variable of variables) {
+    const existing = values.get(variable.name);
+    if (existing !== undefined && existing !== variable.value) throw new Error(`Extension "${extensionId}" conflicts with ${scope} environment variable "${variable.name}".`);
+    if (existing === undefined) {
+      additions.push(`# ${variable.description}\n${variable.name}=${variable.secret ? '' : variable.value}`);
+      values.set(variable.name, variable.secret ? '' : variable.value);
+    }
+  }
+  return additions.length > 0 ? `${contents.replace(/\s*$/, '')}\n\n${additions.join('\n\n')}\n` : contents;
+}
+
+function productionEnvironmentExample(backend, extensions) {
+  if (!backend) {
+    let contents = '# This static frontend has no server-side secrets.\nFRONTEND_URL=https://app.example.com\n';
+    for (const extension of extensions) contents = mergeEnvironmentContents(contents, extension.deploymentEnvironment ?? [], extension.id, 'deployment');
+    return contents;
+  }
   const source = readFileSync(join(backend.sourceDirectory, '.env.example'), 'utf8');
   const replacements = new Map([
     ['APP_ENV', 'production'],
@@ -288,7 +307,9 @@ function productionEnvironmentExample(backend) {
     return `${match[1]}=${replacements.get(match[1])}`;
   });
   for (const [name, value] of replacements) if (!seen.has(name) && ['DATABASE_SSL', 'TRUST_PROXY_HEADERS', 'TRUSTED_PROXY_IPS'].includes(name)) configured.push(`${name}=${value}`);
-  return `# Copy this file to .env. It is deliberately invalid until every replace-me value and\n# every selected email, OAuth, and Stripe setting is configured. Do not commit .env.\n${configured.join('\n')}\n`;
+  let contents = `# Copy this file to .env. It is deliberately invalid until every replace-me value and\n# every selected email, OAuth, and Stripe setting is configured. Do not commit .env.\n${configured.join('\n')}\n`;
+  for (const extension of extensions) contents = mergeEnvironmentContents(contents, extension.deploymentEnvironment ?? [], extension.id, 'deployment');
+  return contents;
 }
 
 function deploymentGuide(backend, frontend) {
@@ -336,7 +357,7 @@ function writeDeployment(destinationDirectory, backend, frontend, extensions) {
   mkdirSync(deploymentDirectory, { recursive: true });
   writeFileSync(join(deploymentDirectory, 'compose.yaml'), deploymentCompose(backend, frontend), 'utf8');
   writeFileSync(join(deploymentDirectory, 'compose.dev.yaml'), developmentCompose(backend, frontend), 'utf8');
-  writeFileSync(join(deploymentDirectory, '.env.production.example'), productionEnvironmentExample(backend), 'utf8');
+  writeFileSync(join(deploymentDirectory, '.env.production.example'), productionEnvironmentExample(backend, extensions), 'utf8');
   writeFileSync(join(deploymentDirectory, 'README.md'), deploymentGuide(backend, frontend), 'utf8');
   if (frontend) {
     writeFileSync(join(deploymentDirectory, '.dockerignore'), '.env\ncerts/\n', 'utf8');
@@ -456,14 +477,7 @@ function mergeEnvironment(destinationDirectory, kind, variables, extensionId) {
   const environmentPath = join(destinationDirectory, kind, '.env.example');
   if (!existsSync(environmentPath)) throw new Error(`Extension "${extensionId}" requires .env.example in ${kind}.`);
   const contents = readFileSync(environmentPath, 'utf8');
-  const values = new Map([...contents.matchAll(/^([A-Z][A-Z0-9_]*)=(.*)$/gm)].map(([, name, value]) => [name, value]));
-  const additions = [];
-  for (const variable of variables) {
-    const existing = values.get(variable.name);
-    if (existing !== undefined && existing !== variable.value) throw new Error(`Extension "${extensionId}" conflicts with ${kind} environment variable "${variable.name}".`);
-    if (existing === undefined) additions.push(`# ${variable.description}\n${variable.name}=${variable.secret ? '' : variable.value}`);
-  }
-  if (additions.length > 0) writeFileSync(environmentPath, `${contents.replace(/\s*$/, '')}\n\n${additions.join('\n\n')}\n`, 'utf8');
+  writeFileSync(environmentPath, mergeEnvironmentContents(contents, variables, extensionId, kind), 'utf8');
 }
 
 function applyExtensions(destinationDirectory, plan) {

@@ -31,18 +31,37 @@
     },
     "conflictsWith": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" } },
     "apiPrefixes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
+    "deploymentEnvironment": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/environment" }
+    },
     "supportedStacks": {
       "type": "array", "minItems": 1,
       "items": { "type": "object", "additionalProperties": false, "properties": { "backend": { "$ref": "#/$defs/template" }, "frontend": { "$ref": "#/$defs/template" } }, "minProperties": 1 }
     },
     "targets": {
       "type": "array", "minItems": 1,
-      "items": { "type": "object", "additionalProperties": false, "required": ["template", "overlay", "replace", "environment", "migrations"], "properties": { "template": { "type": "string", "pattern": "^(backend|frontend):[a-z0-9]+(?:-[a-z0-9]+)*$" }, "overlay": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" }, "replace": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }, "environment": { "type": "array", "items": { "$ref": "#/$defs/environment" } }, "migrations": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } } } }
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["template", "overlay", "replace", "environment", "migrations"],
+        "properties": {
+          "template": { "type": "string", "pattern": "^(backend|frontend):[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "overlay": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" },
+          "replace": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } },
+          "environment": { "type": "array", "items": { "$ref": "#/$defs/environment" } },
+          "migrations": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }
+        },
+        "allOf": [{
+          "if": { "properties": { "template": { "pattern": "^frontend:" } } },
+          "then": { "properties": { "environment": { "items": { "properties": { "name": { "pattern": "^NEXT_PUBLIC_" } } } } } }
+        }]
+      }
     }
   },
   "$defs": {
     "capabilities": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$" } },
     "template": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "pattern": "^(backend|frontend):[a-z0-9]+(?:-[a-z0-9]+)*$" }, "version": { "type": "string", "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|\\^[0-9]+\\.[0-9]+\\.[0-9]+)$" } } },
-    "environment": { "type": "object", "additionalProperties": false, "required": ["name", "value", "secret", "description"], "properties": { "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }, "value": { "type": "string" }, "secret": { "type": "boolean" }, "description": { "type": "string", "minLength": 1 } }, "allOf": [{ "if": { "properties": { "secret": { "const": true } } }, "then": { "properties": { "value": { "const": "" } } }] }
+    "environment": { "type": "object", "additionalProperties": false, "required": ["name", "value", "secret", "description"], "properties": { "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }, "value": { "type": "string" }, "secret": { "type": "boolean" }, "description": { "type": "string", "minLength": 1 } }, "allOf": [{ "if": { "properties": { "secret": { "const": true } } }, "then": { "properties": { "value": { "const": "" } } } }] }
   }
 }

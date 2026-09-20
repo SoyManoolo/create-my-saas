@@ -35,6 +35,7 @@ function validTarget(value) {
     && relativePath(value.overlay)
     && uniqueStrings(value.replace, /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$)).+$/)
     && Array.isArray(value.environment) && value.environment.every(validEnvironment)
+    && (!value.template.startsWith('frontend:') || value.environment.every(({ name }) => name.startsWith('NEXT_PUBLIC_')))
     && uniqueStrings(value.migrations, /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$)).+$/)
     && new Set(value.environment.map(({ name }) => name)).size === value.environment.length
     && value.environment.every(({ secret, value: environmentValue }) => !secret || environmentValue === '')
@@ -60,7 +61,7 @@ export function versionSatisfies(version, range) {
 
 function readExtensionManifest(extensionsDirectory, manifestPath) {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  const allowed = new Set(['$schema', 'schemaVersion', 'id', 'aliases', 'version', 'displayName', 'description', 'provides', 'requires', 'conflictsWith', 'apiPrefixes', 'supportedStacks', 'targets']);
+  const allowed = new Set(['$schema', 'schemaVersion', 'id', 'aliases', 'version', 'displayName', 'description', 'provides', 'requires', 'conflictsWith', 'apiPrefixes', 'deploymentEnvironment', 'supportedStacks', 'targets']);
   if (!isObject(manifest) || Object.keys(manifest).some((key) => !allowed.has(key))
     || manifest.schemaVersion !== 1 || typeof manifest.id !== 'string' || !extensionIdPattern.test(manifest.id)
     || (manifest.aliases !== undefined && !uniqueStrings(manifest.aliases, aliasPattern))
@@ -76,6 +77,9 @@ function readExtensionManifest(extensionsDirectory, manifestPath) {
     || new Set(manifest.requires.extensions.map(({ id }) => id)).size !== manifest.requires.extensions.length
     || !uniqueStrings(manifest.conflictsWith ?? [], extensionIdPattern)
     || (manifest.apiPrefixes !== undefined && !uniqueStrings(manifest.apiPrefixes, /^[a-z][a-z0-9-]*$/))
+    || (manifest.deploymentEnvironment !== undefined && (!Array.isArray(manifest.deploymentEnvironment) || !manifest.deploymentEnvironment.every(validEnvironment)
+      || new Set(manifest.deploymentEnvironment.map(({ name }) => name)).size !== manifest.deploymentEnvironment.length
+      || manifest.deploymentEnvironment.some(({ secret, value }) => secret && value !== '')))
     || !Array.isArray(manifest.supportedStacks) || manifest.supportedStacks.length === 0
     || !manifest.supportedStacks.every((stack) => isObject(stack) && Object.keys(stack).every((key) => ['backend', 'frontend'].includes(key)) && Object.keys(stack).length > 0 && (!stack.backend || validTemplateRequirement(stack.backend)) && (!stack.frontend || validTemplateRequirement(stack.frontend)))
     || !Array.isArray(manifest.targets) || manifest.targets.length === 0 || !manifest.targets.every(validTarget)
