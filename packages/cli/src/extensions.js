@@ -158,12 +158,21 @@ export function selectExtensions(extensions, featureIds) {
   }
   const selected = [];
   const selectedIds = new Set();
+  function add(extension) {
+    if (selectedIds.has(extension.id)) return;
+    selectedIds.add(extension.id);
+    for (const dependency of extension.requires.extensions) {
+      const required = lookup.get(dependency.id);
+      if (!required) throw new Error(`Extension "${extension.id}" requires unavailable extension "${dependency.id}".`);
+      add(required);
+    }
+    selected.push(extension);
+  }
   for (const featureId of featureIds) {
     const extension = lookup.get(featureId);
     if (!extension) throw new Error(`Unknown extension "${featureId}". Available: ${[...lookup.keys()].join(', ') || 'none'}.`);
     if (selectedIds.has(extension.id)) throw new Error(`Extension "${extension.id}" was selected more than once.`);
-    selectedIds.add(extension.id);
-    selected.push(extension);
+    add(extension);
   }
   return selected;
 }
