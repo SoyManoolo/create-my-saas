@@ -11,9 +11,9 @@ compatibles, configura su conexión local y deja registrada la selección hecha.
 
 ## Estado actual
 
-La CLI y el catálogo de plantillas funcionan desde este repositorio. La primera
-versión, [`@soymanolo/create-my-saas@0.1.0`](https://www.npmjs.com/package/@soymanolo/create-my-saas),
-ya está publicada en npm.
+La CLI y el catálogo de plantillas funcionan desde este repositorio. La versión
+estable más reciente, [`@soymanolo/create-my-saas@1.1.0`](https://www.npmjs.com/package/@soymanolo/create-my-saas),
+se publica en npm mediante el workflow de releases.
 
 Actualmente hay seis plantillas:
 

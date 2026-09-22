@@ -5,16 +5,28 @@ este archivo. El proyecto sigue [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-22
+
+### Added
+
+- Las extensiones externas pueden usar un namespace de autor estable y se
+  descubren desde directorios locales con `--extensions-dir`.
+- Las extensiones de FastAPI pueden componer routers, configuración validada y
+  acciones de auditoría mediante integraciones declarativas. Las extensiones de
+  Next.js pueden declarar sus rutas generadas.
+- La CLI resuelve automáticamente las dependencias disponibles de una
+  extensión y las instala en orden de dependencia.
+
 ### Changed
 
-- El contrato público de extensiones acepta namespaces de autor y cuenta con
-  una prueba de extremo a extremo para extensiones externas mediante
-  `--extensions-dir`.
+- Las notas de cada GitHub Release se generan a partir de su sección del
+  changelog.
 
 ### Fixed
 
 - Corregido el workflow de releases para validar correctamente la versión del
-  tag antes de publicar futuras versiones.
+  tag antes de publicar.
+- La selección explícita de una dependencia ya resuelta es idempotente.
 
 ## [1.0.0] - 2026-09-20
 
@@ -57,4 +69,5 @@ Primera versión estable pública de Community.
   plantillas y extensiones compatibles.
 
 [Unreleased]: https://github.com/SoyManoolo/create-my-saas/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/SoyManoolo/create-my-saas/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/SoyManoolo/create-my-saas/compare/v0.1.0...v1.0.0

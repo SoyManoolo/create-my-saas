@@ -70,7 +70,9 @@ The current public manifest version is `1`.
 stacks use the same version syntax for each backend or frontend template. The
 generator rejects a selected extension before writing files unless one complete
 stack matches, all required capabilities are available, and every required
-extension was explicitly selected at a compatible version.
+extension is available at a compatible version. Available dependencies are
+selected automatically and installed first; dependencies not present in the
+configured extension directories are rejected.
 
 `provides` adds capabilities in dependency order. Use `conflictsWith` when two
 extensions cannot coexist. The manifest can also declare `apiPrefixes` for new

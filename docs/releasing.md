@@ -3,7 +3,7 @@
 Las releases de `@soymanolo/create-my-saas` se publican automáticamente desde
 un tag Git. El workflow valida la versión, ejecuta las comprobaciones de la
 CLI, inspecciona el contenido de npm, publica el paquete y crea la GitHub
-Release con notas generadas a partir de los commits. La excepción es el tag de
+Release con notas generadas a partir de su sección del changelog. La excepción es el tag de
 arranque `v1.0.0`, detallado abajo.
 
 ## Configuración única antes de la primera publicación
