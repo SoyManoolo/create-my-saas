@@ -8,7 +8,9 @@ const aliasPattern = /^[a-z][a-z0-9-]*$/;
 const versionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const versionRangePattern = /^(?:[0-9]+\.[0-9]+\.[0-9]+|\^[0-9]+\.[0-9]+\.[0-9]+)$/;
 const capabilityPattern = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
+const auditActionPattern = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/;
 const environmentPattern = /^[A-Z][A-Z0-9_]*$/;
+const importReferencePattern = /^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 function isObject(value) {
   return Boolean(value) && !Array.isArray(value) && typeof value === 'object';
@@ -44,6 +46,32 @@ function validTarget(value) {
     && Object.keys(value).every((key) => ['template', 'overlay', 'replace', 'environment', 'migrations'].includes(key));
 }
 
+function validIntegrationSettings(value) {
+  return Array.isArray(value) && value.every((setting) => isObject(setting)
+    && typeof setting.name === 'string' && environmentPattern.test(setting.name)
+    && typeof setting.default === 'string' && Number.isInteger(setting.minLength) && setting.minLength >= 0
+    && Object.keys(setting).every((key) => ['name', 'default', 'minLength'].includes(key)))
+    && new Set(value.map(({ name }) => name)).size === value.length;
+}
+
+function validIntegrations(value) {
+  if (value === undefined) return true;
+  if (!isObject(value) || Object.keys(value).some((key) => !['fastapi', 'frontendRoutes'].includes(key))) return false;
+  const fastapi = value.fastapi;
+  if (fastapi !== undefined) {
+    if (!isObject(fastapi) || Object.keys(fastapi).some((key) => !['routers', 'settings', 'auditActions'].includes(key))) return false;
+    if (fastapi.routers !== undefined && !uniqueStrings(fastapi.routers, importReferencePattern)) return false;
+    if (fastapi.settings !== undefined && !validIntegrationSettings(fastapi.settings)) return false;
+    if (fastapi.auditActions !== undefined && (!Array.isArray(fastapi.auditActions)
+      || !fastapi.auditActions.every((action) => isObject(action)
+        && typeof action.name === 'string' && auditActionPattern.test(action.name)
+        && uniqueStrings(action.metadata, /^[A-Za-z][A-Za-z0-9_]*$/)
+        && Object.keys(action).every((key) => ['name', 'metadata'].includes(key)))
+      || new Set(fastapi.auditActions.map(({ name }) => name)).size !== fastapi.auditActions.length)) return false;
+  }
+  return value.frontendRoutes === undefined || uniqueStrings(value.frontendRoutes, /^\/[A-Za-z0-9_./-]*$/);
+}
+
 function invalidManifest(manifestPath) {
   return new Error(`Invalid extension manifest: ${manifestPath}`);
 }
@@ -63,7 +91,7 @@ export function versionSatisfies(version, range) {
 
 function readExtensionManifest(extensionsDirectory, manifestPath) {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  const allowed = new Set(['$schema', 'schemaVersion', 'id', 'aliases', 'version', 'displayName', 'description', 'provides', 'requires', 'conflictsWith', 'apiPrefixes', 'deploymentEnvironment', 'supportedStacks', 'targets']);
+  const allowed = new Set(['$schema', 'schemaVersion', 'id', 'aliases', 'version', 'displayName', 'description', 'provides', 'requires', 'conflictsWith', 'apiPrefixes', 'deploymentEnvironment', 'integrations', 'supportedStacks', 'targets']);
   if (!isObject(manifest) || Object.keys(manifest).some((key) => !allowed.has(key))
     || manifest.schemaVersion !== 1 || typeof manifest.id !== 'string' || !extensionIdPattern.test(manifest.id)
     || (manifest.aliases !== undefined && !uniqueStrings(manifest.aliases, aliasPattern))
@@ -82,6 +110,7 @@ function readExtensionManifest(extensionsDirectory, manifestPath) {
     || (manifest.deploymentEnvironment !== undefined && (!Array.isArray(manifest.deploymentEnvironment) || !manifest.deploymentEnvironment.every(validEnvironment)
       || new Set(manifest.deploymentEnvironment.map(({ name }) => name)).size !== manifest.deploymentEnvironment.length
       || manifest.deploymentEnvironment.some(({ secret, value }) => secret && value !== '')))
+    || !validIntegrations(manifest.integrations)
     || !Array.isArray(manifest.supportedStacks) || manifest.supportedStacks.length === 0
     || !manifest.supportedStacks.every((stack) => isObject(stack) && Object.keys(stack).every((key) => ['backend', 'frontend'].includes(key)) && Object.keys(stack).length > 0 && (!stack.backend || validTemplateRequirement(stack.backend)) && (!stack.frontend || validTemplateRequirement(stack.frontend)))
     || !Array.isArray(manifest.targets) || manifest.targets.length === 0 || !manifest.targets.every(validTarget)

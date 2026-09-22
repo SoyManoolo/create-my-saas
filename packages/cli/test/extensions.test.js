@@ -91,6 +91,39 @@ test('installs ordered backend and frontend extension overlays and records exact
   assert.equal(metadata.extensions[0].version, '1.0.0');
 });
 
+test('composes FastAPI integrations from api-keys and webhooks-style features', (t) => {
+  const { root, templates, extensions } = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const backend = join(templates, 'backend', 'test');
+  const frontend = join(templates, 'frontend', 'test');
+  const backendManifest = JSON.parse(readFileSync(join(backend, 'template.manifest.json'), 'utf8'));
+  backendManifest.id = 'backend:fastapi';
+  writeJson(join(backend, 'template.manifest.json'), backendManifest);
+  const frontendManifest = JSON.parse(readFileSync(join(frontend, 'template.manifest.json'), 'utf8'));
+  frontendManifest.id = 'frontend:nextjs';
+  writeJson(join(frontend, 'template.manifest.json'), frontendManifest);
+  for (const [directory, id, integration, file] of [
+    ['api-keys', 'pro:api-keys', { fastapi: { routers: ['src.modules.api_keys.router:router'], settings: [{ name: 'API_KEY_PEPPER', default: '', minLength: 32 }], auditActions: [{ name: 'api_key.created', metadata: ['name', 'scopes'] }] }, frontendRoutes: ['/settings/api-keys'] }, 'api_keys.py'],
+    ['webhooks', 'pro:webhooks', { fastapi: { routers: ['src.modules.webhooks.router:router'], settings: [{ name: 'WEBHOOK_SIGNING_SECRET', default: '', minLength: 32 }], auditActions: [{ name: 'webhook.received', metadata: ['provider'] }] }, frontendRoutes: ['/settings/webhooks'] }, 'webhooks.py'],
+  ]) {
+    addExtension(extensions, directory, extensionManifest(id, {
+      supportedStacks: [{ backend: { id: 'backend:fastapi', version: '^1.0.0' }, frontend: { id: 'frontend:nextjs', version: '^1.0.0' } }],
+      integrations: integration,
+      targets: [{ template: 'backend:fastapi', overlay: 'backend', replace: [], environment: [], migrations: [`alembic/versions/${file}`] }, { template: 'frontend:nextjs', overlay: 'frontend', replace: [], environment: [], migrations: [] }],
+    }), { [`backend/alembic/versions/${file}`]: '# migration\n', [`frontend/app/settings/${directory}/page.tsx`]: 'export default function Page() { return null; }\n' });
+  }
+  const destination = join(root, 'generated');
+  generateProject({ destination, backendId: 'fastapi', frontendId: 'nextjs', featureIds: ['pro:api-keys', 'pro:webhooks'], templatesDirectory: templates, extensionsDirectories: [extensions] });
+  const registry = readFileSync(join(destination, 'backend', 'src', 'core', 'extensions.py'), 'utf8');
+  assert.match(registry, /src\.modules\.api_keys\.router:router/);
+  assert.match(registry, /src\.modules\.webhooks\.router:router/);
+  assert.match(registry, /API_KEY_PEPPER/);
+  assert.match(registry, /WEBHOOK_SIGNING_SECRET/);
+  assert.match(registry, /api_key\.created/);
+  assert.match(registry, /webhook\.received/);
+  assert.match(readFileSync(join(destination, 'frontend', 'app', 'extensions.generated.ts'), 'utf8'), /settings\/api-keys.*settings\/webhooks/);
+});
+
 test('merges extension deployment environment separately, once, with comments and secrets', (t) => {
   const { root, templates, extensions } = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));

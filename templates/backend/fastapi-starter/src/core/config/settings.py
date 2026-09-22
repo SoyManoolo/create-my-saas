@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import json
 import os
 from urllib.parse import urlparse
+from src.core.extensions import extension_value, validate_extension_settings
 
 def _bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
@@ -63,6 +64,7 @@ class Settings:
         return bool(self.email_delivery_url and self.email_delivery_token)
 
     def validate(self) -> None:
+        validate_extension_settings()
         database_scheme = urlparse(self.database_url).scheme
         if database_scheme != "postgresql+asyncpg":
             raise RuntimeError("DATABASE_URL must use the postgresql+asyncpg driver.")
@@ -110,4 +112,7 @@ class Settings:
             raise RuntimeError("COOKIE_SAME_SITE must be lax, strict or none.")
         if self.cookie_same_site == "none" and not self.cookie_secure:
             raise RuntimeError("COOKIE_SECURE is required when COOKIE_SAME_SITE is none.")
+
+    def extension_value(self, name: str) -> str:
+        return extension_value(name)
 settings = Settings()

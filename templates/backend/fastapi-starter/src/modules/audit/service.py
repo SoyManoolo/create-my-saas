@@ -7,9 +7,10 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
+from src.core.extensions import EXTENSION_AUDIT_ACTIONS
 from src.modules.users.model import AuditLog
 
-AuditValue = str | int | bool | None
+AuditValue = str | int | bool | None | list[str]
 
 
 class AuditAction(StrEnum):
@@ -40,23 +41,25 @@ def record_audit_event(
     *,
     organization_id: UUID,
     actor_user_id: UUID | None,
-    action: AuditAction,
+    action: AuditAction | str,
     target_type: str,
     target_id: UUID | str | None = None,
     metadata: Mapping[str, AuditValue] | None = None,
 ) -> AuditLog | None:
     safe_metadata = dict(metadata or {})
-    unexpected = safe_metadata.keys() - _ALLOWED_METADATA[action]
+    action_value = action.value if isinstance(action, AuditAction) else action
+    allowed_metadata = _ALLOWED_METADATA.get(action) or frozenset(EXTENSION_AUDIT_ACTIONS.get(action_value, []))
+    unexpected = safe_metadata.keys() - allowed_metadata
     if unexpected:
         raise ValueError(f"Audit metadata is not allowed for {action}: {', '.join(sorted(unexpected))}")
-    if any(isinstance(value, (dict, list, tuple, set)) for value in safe_metadata.values()):
+    if any(isinstance(value, (dict, tuple, set)) or (isinstance(value, list) and not all(isinstance(item, str) for item in value)) for value in safe_metadata.values()):
         raise ValueError("Audit metadata values must be scalar.")
     if not settings.audit_log_enabled:
         return None
     event = AuditLog(
         organization_id=organization_id,
         actor_user_id=actor_user_id,
-        action=action.value,
+        action=action_value,
         target_type=target_type,
         target_id=str(target_id) if target_id is not None else None,
         metadata_=safe_metadata,

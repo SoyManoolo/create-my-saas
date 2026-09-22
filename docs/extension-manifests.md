@@ -77,6 +77,27 @@ extensions cannot coexist. The manifest can also declare `apiPrefixes` for new
 HTTP route prefixes; the generator includes them in the generated gateway
 configuration.
 
+## Composable integration points
+
+For FastAPI extensions, `integrations.fastapi` declaratively registers router
+imports, environment-backed settings (with a minimum-length validation rule),
+and allowlisted audit actions. The generator combines those entries into the
+base integration registry, so extensions never need to replace `main.py`, the
+settings module, or the audit service. `integrations.frontendRoutes` records
+Next.js routes in `app/extensions.generated.ts`; the route components remain
+ordinary overlay files and therefore compose by path.
+
+```json
+"integrations": {
+  "fastapi": {
+    "routers": ["src.modules.reports.router:router"],
+    "settings": [{ "name": "REPORTS_TOKEN", "default": "", "minLength": 32 }],
+    "auditActions": [{ "name": "reports.exported", "metadata": ["format"] }]
+  },
+  "frontendRoutes": ["/settings/reports"]
+}
+```
+
 ## Overlays and migrations
 
 Overlays are copied after the selected base template. New files are allowed.
