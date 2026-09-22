@@ -163,15 +163,19 @@ export function selectExtensions(extensions, featureIds) {
     selectedIds.add(extension.id);
     for (const dependency of extension.requires.extensions) {
       const required = lookup.get(dependency.id);
-      if (!required) throw new Error(`Extension "${extension.id}" requires unavailable extension "${dependency.id}".`);
-      add(required);
+      // Keep missing dependencies for resolveExtensions(), where they are
+      // reported as requiring an explicit selection. Dependencies that are
+      // available are still included first to preserve dependency order.
+      if (required) add(required);
     }
     selected.push(extension);
   }
   for (const featureId of featureIds) {
     const extension = lookup.get(featureId);
     if (!extension) throw new Error(`Unknown extension "${featureId}". Available: ${[...lookup.keys()].join(', ') || 'none'}.`);
-    if (selectedIds.has(extension.id)) throw new Error(`Extension "${extension.id}" was selected more than once.`);
+    // An extension can already be selected because a preceding feature
+    // depends on it. Treat that explicit selection as idempotent.
+    if (selectedIds.has(extension.id)) continue;
     add(extension);
   }
   return selected;
