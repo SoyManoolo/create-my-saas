@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://create-my-saas.dev/schemas/extension-manifest-v1.json",
   "title": "create-my-saas extension manifest",
-  "description": "Metadata for a versioned Community or Pro extension.",
+  "description": "Metadata for a versioned create-my-saas extension.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "version", "displayName", "description", "provides", "requires", "supportedStacks", "targets"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
-    "id": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$" },
     "aliases": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "displayName": { "type": "string", "minLength": 1 },
@@ -25,11 +25,11 @@
         "extensions": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" }, "version": { "type": "string", "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|\\^[0-9]+\\.[0-9]+\\.[0-9]+)$" } } }
+          "items": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$" }, "version": { "type": "string", "pattern": "^(?:[0-9]+\\.[0-9]+\\.[0-9]+|\\^[0-9]+\\.[0-9]+\\.[0-9]+)$" } } }
         }
       }
     },
-    "conflictsWith": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(community|pro):[a-z][a-z0-9-]*$" } },
+    "conflictsWith": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$" } },
     "apiPrefixes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
     "deploymentEnvironment": {
       "type": "array",

@@ -5,10 +5,9 @@ in the `templates` directory.
 
 Extensions are versioned overlays with their own manifests. Select one with
 repeatable `--feature <id>` flags; the generator validates the complete stack
-before writing files. The public `community:astro-billing` extension retains
-the short selector `--feature billing` and requires FastAPI or NestJS. A
-future private Pro directory can be supplied explicitly with
-`--extensions-dir <path>`; the CLI never downloads one implicitly.
+before writing files. Discover extensions stored outside the package with a
+repeatable `--extensions-dir <path>` flag. The CLI only reads the directories
+you provide; it never downloads extensions or executes commands from them.
 
 From this repository, run:
 

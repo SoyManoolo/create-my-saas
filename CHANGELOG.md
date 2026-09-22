@@ -5,6 +5,12 @@ este archivo. El proyecto sigue [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- El contrato público de extensiones acepta namespaces de autor y cuenta con
+  una prueba de extremo a extremo para extensiones externas mediante
+  `--extensions-dir`.
+
 ### Fixed
 
 - Corregido el workflow de releases para validar correctamente la versión del

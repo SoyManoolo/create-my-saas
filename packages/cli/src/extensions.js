@@ -1,7 +1,9 @@
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-const extensionIdPattern = /^(community|pro):[a-z][a-z0-9-]*$/;
+// The namespace belongs to the extension author. Keeping it unconstrained lets
+// independently distributed extensions use a stable public identifier.
+const extensionIdPattern = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 const aliasPattern = /^[a-z][a-z0-9-]*$/;
 const versionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const versionRangePattern = /^(?:[0-9]+\.[0-9]+\.[0-9]+|\^[0-9]+\.[0-9]+\.[0-9]+)$/;
@@ -168,7 +170,7 @@ export function resolveExtensions(selectedExtensions, { backend, frontend, cliVe
   for (const extension of selectedExtensions) visit(extension);
   const selectedIds = new Set(resolved.map(({ id }) => id));
   for (const extension of resolved) {
-    const conflict = extension.conflictsWith.find((id) => selectedIds.has(id));
+    const conflict = (extension.conflictsWith ?? []).find((id) => selectedIds.has(id));
     if (conflict) throw new Error(`Extension "${extension.id}" conflicts with "${conflict}".`);
   }
   const capabilities = new Set([...(backend?.capabilities ?? []), ...(frontend?.capabilities ?? [])]);

@@ -6,8 +6,8 @@ const usage = `Usage: create-my-saas <destination> [options]
 Options:
   --backend <id>     Backend template to generate
   --frontend <id>    Frontend template to generate
-  --feature <id>     Enable a Community or supplied extension (repeatable)
-  --extensions-dir <path>  Discover additional local extensions (repeatable)
+  --feature <id>           Enable an extension (repeatable)
+  --extensions-dir <path>  Discover an additional local extension directory (repeatable)
   --list             List available templates
   --help, -h         Show this help
 

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const text = (command, argumentsList) => execFileSync(command, argumentsList, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 const trackedFiles = text('git', ['ls-files', '-z']).split('\0').filter(Boolean);
@@ -32,6 +32,10 @@ function scanDependencyManifest(path, content) {
   if (/^(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock|uv\.lock|pyproject\.toml|requirements[^/]*\.txt)$/i.test(path) && privateRegistryPattern.test(content)) report(path, 'non-public dependency source');
 }
 for (const path of trackedFiles) {
+  // A removed tracked file remains in `git ls-files` until it is committed.
+  // Its historical content is still scanned below, but it cannot be read from
+  // the working tree during a release check.
+  if (!existsSync(path)) continue;
   if (forbiddenPath.test(path) && !allowedEnvironmentExample.test(path)) report(path, 'forbidden generated, local, credential, or environment file');
   const content = readFileSync(path, 'utf8'); scanText(path, content); scanDependencyManifest(path, content);
   if (path.startsWith('extensions/') && path.endsWith('extension.manifest.json') && !String(JSON.parse(content).id ?? '').startsWith('community:')) report(path, 'non-Community extension manifest');

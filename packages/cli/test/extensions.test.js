@@ -68,13 +68,13 @@ test('matches only documented extension version constraints', () => {
 test('installs ordered backend and frontend extension overlays and records exact metadata', (t) => {
   const { root, templates, extensions } = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  addExtension(extensions, 'base', extensionManifest('community:base', {
+  addExtension(extensions, 'base', extensionManifest('acme:base', {
     aliases: ['base'], provides: ['feature.base'],
     targets: [{ template: 'backend:test', overlay: 'backend', replace: [], environment: [{ name: 'BASE_FEATURE_KEY', value: 'enabled', secret: false, description: 'Enables the base extension.' }], migrations: ['migrations/001-base.sql'] }],
   }), { 'backend/src/base.js': 'export const extension = true;\n', 'backend/migrations/001-base.sql': '-- base migration\n' });
-  addExtension(extensions, 'addon', extensionManifest('community:addon', {
+  addExtension(extensions, 'addon', extensionManifest('acme:addon', {
     aliases: ['addon'], provides: ['feature.addon'], apiPrefixes: ['addon-api'],
-    requires: { cli: '^1.0.0', capabilities: ['feature.base'], extensions: [{ id: 'community:base', version: '^1.0.0' }] },
+    requires: { cli: '^1.0.0', capabilities: ['feature.base'], extensions: [{ id: 'acme:base', version: '^1.0.0' }] },
     targets: [{ template: 'frontend:test', overlay: 'frontend', replace: [], environment: [], migrations: [] }],
   }), { 'frontend/src/addon.js': 'export const addon = true;\n' });
 
@@ -87,7 +87,7 @@ test('installs ordered backend and frontend extension overlays and records exact
   assert.match(readFileSync(join(destination, 'frontend', '.env.example'), 'utf8'), /^KEEP_ME=yes$/m);
   assert.match(readFileSync(join(destination, 'deployment', 'nginx.conf'), 'utf8'), /\(auth\|users\|addon-api\)/);
   const metadata = JSON.parse(readFileSync(join(destination, '.create-my-saas.json'), 'utf8'));
-  assert.deepEqual(metadata.extensions.map(({ id }) => id), ['community:base', 'community:addon']);
+  assert.deepEqual(metadata.extensions.map(({ id }) => id), ['acme:base', 'acme:addon']);
   assert.equal(metadata.extensions[0].version, '1.0.0');
 });
 

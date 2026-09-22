@@ -1,77 +1,106 @@
-# Extension manifests
+# Creating extensions
 
-An extension is a separately versioned overlay that the Community CLI installs
-only when selected with `--feature`. Community extensions ship below
-`extensions/`; Pro extensions may be supplied later through an explicit local
-extension directory. The CLI never downloads an extension or runs a command
-declared by one.
+Extensions are versioned, declarative overlays installed only when selected
+with `--feature`. They can live in the package's `extensions/` directory or in
+any local directory passed to the 1.0.0 CLI with `--extensions-dir`. The CLI
+reads those directories recursively; it never downloads an extension or runs a
+command declared by one.
 
-Each extension has an `extension.manifest.json` validated against
-[`extension-manifest.schema.json`](./extension-manifest.schema.json). Version 1
-uses IDs such as `community:astro-billing` and `pro:api-keys`. An optional,
-unique short alias such as `billing` preserves a friendly CLI interface.
+```sh
+create-my-saas app --backend fastapi --frontend nextjs \
+  --extensions-dir ./my-extensions --feature acme:reports
+```
 
-The manifest declares the CLI version, supported complete stacks, template
-targets, required and provided capabilities, extension dependencies, conflicts,
-template and deployment environment variables, migration files and any public API prefixes. API prefixes
-are incorporated into the generated gateway configuration; an extension with
-new HTTP routes must declare them. Version constraints intentionally
-support only an exact semantic version or a caret range (for example,
-`^1.0.0`); this keeps the contract deterministic without accepting an
-incomplete imitation of npm range syntax.
+`--extensions-dir` is repeatable. Extension IDs have the form
+`namespace:name`, for example `acme:reports`; choose a namespace you control.
+An optional unique short alias can make selection more convenient.
 
-Overlays are copied after their base template. New files are allowed. Replacing
-a Community file must be explicitly listed in the target's `replace` array;
-two selected extensions may never write the same path. Environment variables
-are merged into the generated `.env.example` instead of copying that file from
-an overlay. Migration paths are declared so a release can be reviewed; the CLI
-only copies them and never executes migrations.
+## Extension layout
 
-## Runtime and deployment environment
+Every extension directory contains an `extension.manifest.json` and any
+overlay files it declares:
 
-`targets[].environment` belongs exclusively to the template named by that
-target. A backend target writes to `backend/.env.example`. A frontend target may
-only declare variables whose names start with `NEXT_PUBLIC_`; those values are
-written to `frontend/.env.example` and are public at build time. Never use a
-frontend target for a secret.
+```text
+my-extensions/
+  reports/
+    extension.manifest.json
+    overlays/
+      backend/
+        src/reports.js
+        migrations/001-reports.sql
+```
 
-Use the root-level `deploymentEnvironment` array for variables consumed by the
-production Compose deployment. The generator appends them to
-`deployment/.env.production.example`, preserving the file's existing comments.
-Each entry has `name`, `value`, `secret`, and `description`. A secret must use
-an empty `value`, and is emitted empty so the deployer must provide it. Reusing
-an identical variable across extensions writes it once; conflicting values are
-rejected.
+The manifest must conform to
+[`extension-manifest.schema.json`](./extension-manifest.schema.json). Its
+`schemaVersion` is versioned independently from the extension's own `version`.
+The current public manifest version is `1`.
 
 ```json
 {
-  "deploymentEnvironment": [
+  "$schema": "https://create-my-saas.dev/schemas/extension-manifest-v1.json",
+  "schemaVersion": 1,
+  "id": "acme:reports",
+  "version": "1.0.0",
+  "displayName": "Reports",
+  "description": "Adds report endpoints.",
+  "provides": ["reports.api"],
+  "requires": {
+    "cli": "^1.0.0",
+    "capabilities": ["auth.password"],
+    "extensions": []
+  },
+  "supportedStacks": [
+    { "backend": { "id": "backend:fastapi", "version": "^0.1.0" } }
+  ],
+  "targets": [
     {
-      "name": "STRIPE_WEBHOOK_SECRET",
-      "value": "",
-      "secret": true,
-      "description": "Signing secret for Stripe webhook verification."
-    },
-    {
-      "name": "DEPLOYMENT_REGION",
-      "value": "eu-west-1",
-      "secret": false,
-      "description": "Region used by the release integration."
+      "template": "backend:fastapi",
+      "overlay": "overlays/backend",
+      "replace": [],
+      "environment": [],
+      "migrations": ["migrations/001-reports.sql"]
     }
   ]
 }
 ```
 
-This separation is intentional: deployment variables never appear in a
-template `.env.example`, backend variables never move into the deployment
-example, and frontend variables are permitted only under `NEXT_PUBLIC_`.
+## Compatibility contract
 
-An extension that needs a package dependency supplies the compatible package
-manifest and lockfile as explicit replacements in its target overlay. This is
-deliberate: the CLI does not guess how to edit npm, pnpm, uv, or another
-package-manager lockfile. The extension author owns and tests that compatible
-dependency update for each declared stack.
+`requires.cli` accepts an exact semantic version or a caret range. Supported
+stacks use the same version syntax for each backend or frontend template. The
+generator rejects a selected extension before writing files unless one complete
+stack matches, all required capabilities are available, and every required
+extension was explicitly selected at a compatible version.
 
-Selected extensions are resolved in dependency order and recorded with their
-canonical IDs and exact versions in `.create-my-saas.json`. A dependency is
-explicit: selecting an extension does not silently select another one.
+`provides` adds capabilities in dependency order. Use `conflictsWith` when two
+extensions cannot coexist. The manifest can also declare `apiPrefixes` for new
+HTTP route prefixes; the generator includes them in the generated gateway
+configuration.
+
+## Overlays and migrations
+
+Overlays are copied after the selected base template. New files are allowed.
+To replace a base-template file, list its relative path in `replace`; selected
+extensions may not write the same path. Paths must remain inside the extension
+directory and overlays cannot contain symbolic links.
+
+List every migration relative to the overlay in `migrations`. The CLI copies
+migration files but never executes them. An extension must provide the package
+manifest and lockfile as explicit overlay replacements when it needs dependency
+changes; the CLI never edits package-manager files heuristically.
+
+## Environment variables
+
+`targets[].environment` belongs to that target only: backend values are added
+to `backend/.env.example`, and frontend values are added to
+`frontend/.env.example`. Frontend variable names must start with
+`NEXT_PUBLIC_` and cannot be secrets.
+
+Use root-level `deploymentEnvironment` for values consumed by production
+deployment. Those values are added only to `deployment/.env.production.example`.
+Each environment item has `name`, `value`, `secret`, and `description`; a
+secret must have an empty value. Identical declarations from multiple selected
+extensions are emitted once, while conflicting declarations are rejected.
+
+Validate bundled manifests with `pnpm run validate:extensions`, and test each
+declared stack by generating a disposable project with the extension selected.

@@ -175,7 +175,6 @@ se abordarán según adopción y feedback de la comunidad.
 
 - [Contrato de los manifiestos](./docs/template-manifests.md)
 - [Contrato de extensiones](./docs/extension-manifests.md)
-- [Límite de producto y extensiones Community/Pro](./docs/community-pro-boundary.md)
 - [Publicar una release de la CLI](./docs/releasing.md)
 - [Despliegue reproducible](./docs/deployment.md)
 - [Contrato operativo común de FastAPI, NestJS y Fastify](./templates/backend/backend-infrastructure-contract.md)

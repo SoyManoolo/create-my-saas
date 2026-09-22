@@ -122,9 +122,36 @@ test('parses repeatable optional frontend features', () => {
 
 test('parses explicit local extension directories', () => {
   assert.deepEqual(
-    parseArguments(['demo', '--backend', 'fastapi', '--extensions-dir', 'C:/pro/extensions', '--extensions-dir=./extra']),
-    { destination: 'demo', backendId: 'fastapi', frontendId: undefined, featureIds: [], extensionsDirectories: ['C:/pro/extensions', './extra'], list: false, help: false },
+    parseArguments(['demo', '--backend', 'fastapi', '--extensions-dir', 'C:/external/extensions', '--extensions-dir=./extra']),
+    { destination: 'demo', backendId: 'fastapi', frontendId: undefined, featureIds: [], extensionsDirectories: ['C:/external/extensions', './extra'], list: false, help: false },
   );
+});
+
+test('loads a compatible external extension through --extensions-dir', (t) => {
+  const workspace = temporaryDirectory();
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  const extensionDirectory = join(workspace, 'external-extensions', 'reports');
+  const overlayDirectory = join(extensionDirectory, 'overlays', 'backend', 'src');
+  mkdirSync(overlayDirectory, { recursive: true });
+  writeJson(join(extensionDirectory, 'extension.manifest.json'), {
+    schemaVersion: 1,
+    id: 'acme:reports',
+    version: '1.0.0',
+    displayName: 'Reports',
+    description: 'External compatibility fixture.',
+    provides: ['reports.api'],
+    requires: { cli: '^1.0.0', capabilities: ['auth.password'], extensions: [] },
+    supportedStacks: [{ backend: { id: 'backend:fastapi', version: '^0.1.0' } }],
+    targets: [{ template: 'backend:fastapi', overlay: 'overlays/backend', replace: [], environment: [{ name: 'REPORTS_RETENTION_DAYS', value: '30', secret: false, description: 'Days to retain reports.' }], migrations: [] }],
+  });
+  writeFileSync(join(overlayDirectory, 'reports.py'), 'REPORTS_ENABLED = True\n', 'utf8');
+
+  const destination = join(workspace, 'generated');
+  const status = run([destination, '--backend', 'fastapi', '--extensions-dir', join(workspace, 'external-extensions'), '--feature', 'acme:reports'], { log: () => {}, error: () => {} });
+
+  assert.equal(status, 0);
+  assert.equal(readFileSync(join(destination, 'backend', 'src', 'reports.py'), 'utf8'), 'REPORTS_ENABLED = True\n');
+  assert.match(readFileSync(join(destination, 'backend', '.env.example'), 'utf8'), /REPORTS_RETENTION_DAYS=30/);
 });
 
 test('lists templates from manifests', () => {
