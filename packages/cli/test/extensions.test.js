@@ -6,6 +6,8 @@ import test from 'node:test';
 import { generateProject } from '../src/generator.js';
 import { versionSatisfies } from '../src/extensions.js';
 
+const { version: packageVersion } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
+
 function workspace() { return mkdtempSync(join(tmpdir(), 'create-my-saas-extension-')); }
 function writeJson(path, value) { writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8'); }
 
@@ -63,6 +65,38 @@ test('matches only documented extension version constraints', () => {
   assert.equal(versionSatisfies('0.1.4', '^0.1.3'), true);
   assert.equal(versionSatisfies('0.2.0', '^0.1.3'), false);
   assert.equal(versionSatisfies('1.2.4-beta.1', '^1.2.3'), false);
+});
+
+test('validates extension CLI requirements against the published package version', (t) => {
+  const { root, templates, extensions } = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const [major] = packageVersion.split('.').map(Number);
+
+  addExtension(extensions, 'exact', extensionManifest('community:exact', {
+    requires: { cli: packageVersion, capabilities: [], extensions: [] },
+    targets: [{ template: 'backend:test', overlay: 'backend', replace: [], environment: [], migrations: [] }],
+  }), { 'backend/src/exact.js': 'export {};' });
+  addExtension(extensions, 'compatible', extensionManifest('community:compatible', {
+    requires: { cli: `^${packageVersion}`, capabilities: [], extensions: [] },
+    targets: [{ template: 'backend:test', overlay: 'backend', replace: [], environment: [], migrations: [] }],
+  }), { 'backend/src/compatible.js': 'export {};' });
+  addExtension(extensions, 'incompatible', extensionManifest('community:incompatible', {
+    requires: { cli: `^${major + 1}.0.0`, capabilities: [], extensions: [] },
+    targets: [{ template: 'backend:test', overlay: 'backend', replace: [], environment: [], migrations: [] }],
+  }), { 'backend/src/incompatible.js': 'export {};' });
+
+  for (const featureId of ['community:exact', 'community:compatible']) {
+    const destination = join(root, featureId.split(':')[1]);
+    generateProject({ destination, backendId: 'test', frontendId: 'test', featureIds: [featureId], templatesDirectory: templates, extensionsDirectories: [extensions] });
+    assert.equal(existsSync(destination), true);
+  }
+
+  const destination = join(root, 'incompatible');
+  assert.throws(
+    () => generateProject({ destination, backendId: 'test', frontendId: 'test', featureIds: ['community:incompatible'], templatesDirectory: templates, extensionsDirectories: [extensions] }),
+    new RegExp(`requires CLI \\^${major + 1}\\.0\\.0; current version is ${packageVersion.replaceAll('.', '\\.')}\\.`),
+  );
+  assert.equal(existsSync(destination), false);
 });
 
 test('installs ordered backend and frontend extension overlays and records exact metadata', (t) => {

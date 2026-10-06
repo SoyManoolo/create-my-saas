@@ -14,7 +14,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { defaultExtensionsDirectory, defaultTemplatesDirectory, findTemplate, loadCatalog } from './catalog.js';
 import { extensionTargetFiles, resolveExtensions, selectExtensions } from './extensions.js';
 
-const cliVersion = '1.0.0';
+const { version: cliVersion } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
 
 const excludedDirectoryNames = new Set([
   '.git',
