@@ -33,7 +33,9 @@ export default function BillingPage() {
     void (async () => {
       try {
         const nextOrganizations = await api.organizations(getAccessToken());
-        setOrganizations(nextOrganizations); setOrganizationId(nextOrganizations[0]?.id ?? "");
+        const requestedId = new URLSearchParams(window.location.search).get("organizationId");
+        setOrganizations(nextOrganizations);
+        setOrganizationId(nextOrganizations.find((organization) => organization.id === requestedId)?.id ?? nextOrganizations[0]?.id ?? "");
         if (!nextOrganizations.length) setLoading(false);
       } catch (error) { setNotice(error instanceof Error ? error.message : "No se han podido cargar las organizaciones."); setLoading(false); }
     })();

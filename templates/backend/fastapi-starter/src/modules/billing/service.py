@@ -74,8 +74,8 @@ class BillingService:
         try:
             session = stripe.checkout.Session.create(
                 mode="subscription", customer=customer_id, client_reference_id=str(organization_id), line_items=[{"price": price_id, "quantity": quantity}],
-                success_url=f"{self._frontend_url()}/organizations/{organization_id}/billing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{self._frontend_url()}/organizations/{organization_id}/billing?checkout=cancelled",
+                success_url=f"{self._frontend_url()}/billing?organizationId={organization_id}&checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{self._frontend_url()}/billing?organizationId={organization_id}&checkout=cancelled",
                 metadata={"organization_id": str(organization_id), "plan": plan["name"]},
                 subscription_data={"metadata": {"organization_id": str(organization_id), "plan": plan["name"]}},
             )
@@ -101,7 +101,7 @@ class BillingService:
         if not subscription or not subscription.provider_customer_id:
             raise AppError("Start Checkout before opening the billing portal.", code="BILLING_CUSTOMER_NOT_FOUND", status_code=409)
         self._configure_stripe()
-        params: dict[str, Any] = {"customer": subscription.provider_customer_id, "return_url": f"{self._frontend_url()}/organizations/{organization_id}/billing"}
+        params: dict[str, Any] = {"customer": subscription.provider_customer_id, "return_url": f"{self._frontend_url()}/billing?organizationId={organization_id}"}
         if self.config.stripe_portal_configuration_id:
             params["configuration"] = self.config.stripe_portal_configuration_id
         try:

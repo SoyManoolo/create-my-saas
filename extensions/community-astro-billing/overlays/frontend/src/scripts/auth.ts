@@ -242,6 +242,8 @@ async function bindBilling(token: string) {
     const organizations = await request<Organization[]>("/organizations", { token });
     if (!organizations.length) { billingStatus("Crea o acepta una organización antes de configurar su facturación."); return; }
     organizations.forEach((organization) => { const option = document.createElement("option"); option.value = organization.id; option.textContent = organization.name; select.append(option); });
+    const requestedId = new URLSearchParams(window.location.search).get("organizationId");
+    if (requestedId && organizations.some((organization) => organization.id === requestedId)) select.value = requestedId;
     if (organizations.length > 1 && organizationControl) organizationControl.hidden = false;
     const load = async () => {
       billingStatus("Cargando facturación…");

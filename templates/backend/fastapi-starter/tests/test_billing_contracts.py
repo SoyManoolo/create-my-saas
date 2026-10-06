@@ -67,17 +67,20 @@ class BillingContractTests(unittest.TestCase):
         db = Session()
         service = BillingService(db, config)
         service._subscription = AsyncMock(return_value=SimpleNamespace(provider_customer_id="cus_secret"))
-        with patch("src.modules.billing.service.stripe.checkout.Session.create", return_value=SimpleNamespace(url="https://checkout.example", id="cs_secret")):
+        with patch("src.modules.billing.service.stripe.checkout.Session.create", return_value=SimpleNamespace(url="https://checkout.example", id="cs_secret")) as create_checkout:
             result = asyncio.run(service.checkout(organization_id, "price_allowed", 2, actor_id))
         self.assertEqual(result["sessionId"], "cs_secret")
+        self.assertEqual(create_checkout.call_args.kwargs["success_url"], f"{config.frontend_url.rstrip('/')}/billing?organizationId={organization_id}&checkout=success&session_id={{CHECKOUT_SESSION_ID}}")
+        self.assertEqual(create_checkout.call_args.kwargs["cancel_url"], f"{config.frontend_url.rstrip('/')}/billing?organizationId={organization_id}&checkout=cancelled")
         checkout_event = db.added[-1]
         self.assertEqual(checkout_event.metadata_, {"provider": "stripe", "plan": "pro", "quantity": 2})
         self.assertNotIn("cs_secret", repr(checkout_event.__dict__))
         self.assertNotIn("cus_secret", repr(checkout_event.__dict__))
 
         db.added.clear()
-        with patch("src.modules.billing.service.stripe.billing_portal.Session.create", return_value=SimpleNamespace(url="https://portal.example", id="bps_secret")):
+        with patch("src.modules.billing.service.stripe.billing_portal.Session.create", return_value=SimpleNamespace(url="https://portal.example", id="bps_secret")) as create_portal:
             asyncio.run(service.portal(organization_id, actor_id))
+        self.assertEqual(create_portal.call_args.kwargs["return_url"], f"{config.frontend_url.rstrip('/')}/billing?organizationId={organization_id}")
         portal_event = db.added[-1]
         self.assertEqual(portal_event.metadata_, {"provider": "stripe"})
         self.assertNotIn("bps_secret", repr(portal_event.__dict__))

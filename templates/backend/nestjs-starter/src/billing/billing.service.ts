@@ -65,8 +65,8 @@ export class BillingService {
     const session = await this.stripe().checkout.sessions.create({
       mode: 'subscription', customer: customer.providerCustomerId, client_reference_id: organizationId,
       line_items: [{ price: priceId, quantity }],
-      success_url: `${this.frontendUrl()}/organizations/${organizationId}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${this.frontendUrl()}/organizations/${organizationId}/billing?checkout=cancelled`,
+      success_url: `${this.frontendUrl()}/billing?organizationId=${encodeURIComponent(organizationId)}&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${this.frontendUrl()}/billing?organizationId=${encodeURIComponent(organizationId)}&checkout=cancelled`,
       metadata: { organization_id: organizationId, plan: plan.name },
       subscription_data: { metadata: { organization_id: organizationId, plan: plan.name } },
     });
@@ -85,7 +85,7 @@ export class BillingService {
     if (!customer) throw new AppError('BILLING_CUSTOMER_NOT_FOUND', 'Start checkout before opening the billing portal.', 409);
     const configuration = this.config.get<string>('STRIPE_PORTAL_CONFIGURATION_ID')?.trim();
     const session = await this.stripe().billingPortal.sessions.create({
-      customer: customer.providerCustomerId, return_url: `${this.frontendUrl()}/organizations/${organizationId}/billing`,
+      customer: customer.providerCustomerId, return_url: `${this.frontendUrl()}/billing?organizationId=${encodeURIComponent(organizationId)}`,
       ...(configuration ? { configuration } : {}),
     });
     await this.audit.record({
