@@ -306,6 +306,9 @@ test('configures the React Router API proxy from the selected backend', (t) => {
   const deploymentCompose = readFileSync(join(destination, 'deployment', 'compose.yaml'), 'utf8');
   assert.match(deploymentCompose, /fetch\('http:\/\/127\.0\.0\.1:8000\/ready'\)/);
   assert.match(deploymentCompose, /api:\n\s+condition: service_healthy/);
+  assert.match(deploymentCompose, /frontend:[\s\S]*?environment:\n      PORT: "3000"\n      API_PROXY_TARGET: http:\/\/api:8000/);
+  const developmentCompose = readFileSync(join(destination, 'deployment', 'compose.dev.yaml'), 'utf8');
+  assert.match(developmentCompose, /frontend:\n    ports:\n      - "127\.0\.0\.1:\$\{FRONTEND_PORT:-3000\}:3000"/);
 });
 
 test('rejects Fastify for a frontend that requires organizations and Stripe Billing', (t) => {

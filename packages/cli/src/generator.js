@@ -150,7 +150,7 @@ function deploymentCompose(backend, frontend) {
       context: ../frontend
       target: runtime
 ${frontendBuildArguments(frontend)}    environment:
-      PORT: "3000"
+      PORT: "3000"${frontend.key === 'react-router' ? '\n      API_PROXY_TARGET: http://api:8000' : ''}
     expose:
       - "3000"
     networks:
