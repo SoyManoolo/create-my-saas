@@ -59,6 +59,14 @@ describe('BillingService', () => {
     await service.checkout('organization-1', 'price_allowed', 2, 'actor-1');
     await service.portal('organization-1', 'actor-1');
 
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(expect.objectContaining({
+      success_url: 'https://app.example/billing?organizationId=organization-1&checkout=success&session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'https://app.example/billing?organizationId=organization-1&checkout=cancelled',
+    }));
+    expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith(expect.objectContaining({
+      return_url: 'https://app.example/billing?organizationId=organization-1',
+    }));
+
     expect(audit.record).toHaveBeenNthCalledWith(1, {
       organizationId: 'organization-1', actorUserId: 'actor-1', action: 'billing.checkout.created', targetType: 'billing',
       metadata: { provider: 'stripe', plan: 'pro', quantity: 2 },

@@ -24,7 +24,7 @@ export default defineConfig(() => {
           '/auth': apiTarget,
           '/users': apiTarget,
           '/organizations': apiTarget,
-          '/billing': apiTarget,
+          '/billing/organizations': apiTarget,
         },
       },
     } : undefined,
