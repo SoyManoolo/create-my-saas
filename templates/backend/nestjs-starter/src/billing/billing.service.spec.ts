@@ -88,4 +88,35 @@ describe('BillingService', () => {
     await expect(service.handleStripeWebhook(Buffer.from(payload), signature)).resolves.toEqual({ accepted: true, duplicate: true });
     await expect(service.handleStripeWebhook(Buffer.from(`${payload} `), signature)).rejects.toMatchObject({ code: 'INVALID_WEBHOOK_SIGNATURE' });
   });
+
+  it('retries a distinct event when another row causes a unique conflict', async () => {
+    const key = 'sk_test_123456789012345678901234'; const secret = 'whsec_test_secret';
+    const { service, events } = setup({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: secret });
+    const payload = JSON.stringify({ id: 'evt_distinct', object: 'event', type: 'product.created', data: { object: {} } });
+    const signature = new Stripe(key).webhooks.generateTestHeaderString({ payload, secret });
+    const conflict = { code: '23505' };
+    let attempts = 0;
+    const apply = jest.fn(async () => { if (++attempts === 1) throw conflict; });
+    (service as unknown as { applyStripeEvent: () => Promise<void> }).applyStripeEvent = apply;
+    events.findOneBy.mockResolvedValue(null);
+    events.save.mockImplementation(async (delivery) => delivery);
+
+    await expect(service.handleStripeWebhook(Buffer.from(payload), signature)).rejects.toBe(conflict);
+    expect(events.findOneBy).toHaveBeenCalledTimes(2);
+    expect(events.findOneBy).toHaveBeenNthCalledWith(2, { provider: 'stripe', providerEventId: 'evt_distinct' });
+    await expect(service.handleStripeWebhook(Buffer.from(payload), signature)).resolves.toEqual({ accepted: true, duplicate: false });
+    expect(apply).toHaveBeenCalledTimes(2);
+  });
+
+  it('acknowledges an insert conflict only when the same event ID exists', async () => {
+    const key = 'sk_test_123456789012345678901234'; const secret = 'whsec_test_secret';
+    const { service, events } = setup({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: secret });
+    const payload = JSON.stringify({ id: 'evt_same', object: 'event', type: 'product.created', data: { object: {} } });
+    const signature = new Stripe(key).webhooks.generateTestHeaderString({ payload, secret });
+    events.findOneBy.mockResolvedValueOnce(null).mockResolvedValueOnce({ provider: 'stripe', providerEventId: 'evt_same' });
+    events.save.mockRejectedValue({ code: '23505' });
+
+    await expect(service.handleStripeWebhook(Buffer.from(payload), signature)).resolves.toEqual({ accepted: true, duplicate: true });
+    expect(events.findOneBy).toHaveBeenNthCalledWith(2, { provider: 'stripe', providerEventId: 'evt_same' });
+  });
 });

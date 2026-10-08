@@ -159,7 +159,9 @@ export class BillingService {
         return { accepted: true, duplicate: false };
       });
     } catch (error) {
-      if (this.isUniqueViolation(error)) return { accepted: true, duplicate: true };
+      if (this.isUniqueViolation(error) && await this.dataSource.manager.getRepository(BillingWebhookEvent).findOneBy({ provider: 'stripe', providerEventId: event.id })) {
+        return { accepted: true, duplicate: true };
+      }
       throw error;
     }
   }
