@@ -177,23 +177,28 @@ export class BillingService {
     if (event.type.startsWith('customer.subscription.')) await this.syncStripeSubscription(manager, event.data.object as Stripe.Subscription);
   }
 
-  private async syncStripeSubscription(manager: EntityManager, stripeSubscription: Stripe.Subscription): Promise<void> {
-    const customerId = this.objectId(stripeSubscription.customer);
+  private async syncStripeSubscription(manager: EntityManager, eventSubscription: Stripe.Subscription): Promise<void> {
+    const customerId = this.objectId(eventSubscription.customer);
     if (!customerId) throw new AppError('INVALID_BILLING_WEBHOOK', 'Stripe subscription customer is missing.', 400);
     const customers = manager.getRepository(BillingCustomer);
     const customer = await customers.findOneBy({ provider: 'stripe', providerCustomerId: customerId });
-    const metadataOrganizationId = this.organizationId(stripeSubscription.metadata.organization_id);
+    const metadataOrganizationId = this.organizationId(eventSubscription.metadata.organization_id);
     if (customer && metadataOrganizationId && customer.organizationId !== metadataOrganizationId) throw new AppError('BILLING_ORGANIZATION_MISMATCH', 'Stripe customer belongs to another organization.', 400);
     const organizationId = customer?.organizationId ?? metadataOrganizationId;
     if (!organizationId) return; // A Stripe subscription not created by this application.
+    // Lock the organization even when no local subscription exists yet.
+    await manager.getRepository(Organization).findOne({ where: { id: organizationId }, lock: { mode: 'pessimistic_write' } });
+    const subscriptions = manager.getRepository(Subscription);
+    let subscription = await subscriptions.findOneBy({ organizationId });
+    if (subscription?.providerSubscriptionId && subscription.providerSubscriptionId !== eventSubscription.id) throw new AppError('BILLING_SUBSCRIPTION_MISMATCH', 'Organization already has a different Stripe subscription.', 400);
+    // Event timestamps can tie; read the current state while holding the lock.
+    const stripeSubscription = await this.stripe().subscriptions.retrieve(eventSubscription.id);
+    if (this.objectId(stripeSubscription.customer) !== customerId) throw new AppError('BILLING_CUSTOMER_MISMATCH', 'Stripe subscription customer changed.', 400);
     if (!customer) await this.upsertCustomer(manager, organizationId, customerId);
 
     const priceId = stripeSubscription.items.data[0]?.price.id;
     const plan = priceId ? this.pricePlans().get(priceId) : undefined;
-    const subscriptions = manager.getRepository(Subscription);
-    let subscription = await subscriptions.findOneBy({ organizationId });
     if (!subscription) subscription = subscriptions.create({ organizationId, provider: 'stripe', plan: 'free', status: 'inactive', providerSubscriptionId: null, currentPeriodStart: null, currentPeriodEnd: null, cancelAtPeriodEnd: false });
-    if (subscription.providerSubscriptionId && subscription.providerSubscriptionId !== stripeSubscription.id) throw new AppError('BILLING_SUBSCRIPTION_MISMATCH', 'Organization already has a different Stripe subscription.', 400);
     subscription.provider = 'stripe'; subscription.providerSubscriptionId = stripeSubscription.id;
     subscription.plan = plan?.name ?? 'unknown'; subscription.status = stripeSubscription.status;
     subscription.currentPeriodStart = this.epochToDate(stripeSubscription.items.data[0]?.current_period_start);

@@ -208,11 +208,27 @@ class BillingService:
         organization_id = subscription.organization_id if subscription else metadata_org_id
         if not organization_id:
             return
+        # Serialize all updates for this organization, including its first subscription.
+        await self.db.execute(select(Organization.id).where(Organization.id == organization_id).with_for_update())
+        subscription = (await self.db.execute(
+            select(Subscription).where(Subscription.organization_id == organization_id).execution_options(populate_existing=True)
+        )).scalar_one_or_none()
+        subscription_id = self._object_id(self._value(stripe_subscription, "id"))
+        if not subscription_id:
+            raise AppError("Stripe subscription ID is missing.", code="INVALID_BILLING_WEBHOOK", status_code=400)
+        if subscription and subscription.provider_subscription_id and subscription.provider_subscription_id != subscription_id:
+            raise AppError("Organization already has a different Stripe subscription.", code="BILLING_SUBSCRIPTION_MISMATCH", status_code=400)
+        # Event timestamps can tie; the current Stripe object is the source of truth.
+        try:
+            self._configure_stripe()
+            stripe_subscription = stripe.Subscription.retrieve(subscription_id)
+        except stripe.StripeError as error:
+            raise AppError("The billing provider could not retrieve the subscription.", code="BILLING_PROVIDER_ERROR", status_code=502) from error
+        if self._object_id(self._value(stripe_subscription, "customer")) != customer_id:
+            raise AppError("Stripe subscription customer changed.", code="BILLING_CUSTOMER_MISMATCH", status_code=400)
         if not subscription:
             subscription = Subscription(organization_id=organization_id, provider="stripe", provider_customer_id=customer_id)
             self.db.add(subscription)
-        if subscription.provider_subscription_id and subscription.provider_subscription_id != self._value(stripe_subscription, "id"):
-            raise AppError("Organization already has a different Stripe subscription.", code="BILLING_SUBSCRIPTION_MISMATCH", status_code=400)
         item = (self._value(self._value(stripe_subscription, "items", {}), "data", []) or [{}])[0]
         price_id = self._object_id(self._value(item, "price"))
         plan = self.price_plans().get(price_id or "")
